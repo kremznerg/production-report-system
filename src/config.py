@@ -26,12 +26,11 @@ class Settings(BaseSettings):
     LAB_DATA_FILE: Path = DATA_DIR / "lab_data.xlsx"
     UTILITIES_FILE: Path = DATA_DIR / "utilities.xlsx"
 
-    # Pydantic konfiguráció: .env fájl kezelése
+    # Pydantic konfiguráció
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_file_encoding="utf-8",
-        extra="ignore" # Ha van extra sor az .env-ben, ne dobjon hibát
+        extra="ignore" 
     )
 
-# Létrehozzuk az egyetlen példányt (Singleton), amit mindenhol használni fogunk
 settings = Settings()
