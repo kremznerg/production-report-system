@@ -1,0 +1,10 @@
+pandas
+streamlit
+sqlalchemy
+pydantic
+pydantic-settings
+python-dotenv
+requests
+openpyxl
+reportlab
+pytest
