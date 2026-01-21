@@ -15,6 +15,7 @@ class MachineDB(Base):
     
     id = Column(String(20), primary_key=True)
     name = Column(String(100), nullable=False)
+    location = Column(String(100))
 
 class ArticleDB(Base):
     """Termék törzsadatok."""
@@ -65,6 +66,7 @@ class QualityDataDB(Base):
     
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, nullable=False)
+    machine_id = Column(String(20), ForeignKey("machines.id"))
     article_id = Column(String(50), ForeignKey("articles.id"))
     
     moisture_pct = Column(Float)
@@ -77,16 +79,20 @@ class UtilityConsumptionDB(Base):
     
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False, index=True)
+    machine_id = Column(String(20), ForeignKey("machines.id"))
     
     water_m3 = Column(Float)
     electricity_kwh = Column(Float)
     steam_tons = Column(Float)
+    fiber_tons = Column(Float)
+    additives_kg = Column(Float)
 
 # --- VALIDÁTOROK (PYDANTIC) ---
 
 class Machine(BaseModel):
     id: str
     name: str
+    location: str
     model_config = ConfigDict(from_attributes=True)
 
 class Article(BaseModel):
@@ -117,6 +123,7 @@ class ProductionPlan(BaseModel):
 
 class QualityMeasurement(BaseModel):
     timestamp: datetime
+    machine_id: str
     article_id: str
     moisture_pct: float
     gsm_measured: float
@@ -125,7 +132,10 @@ class QualityMeasurement(BaseModel):
 
 class UtilityData(BaseModel):
     date: date
+    machine_id: str
     water_m3: float
     electricity_kwh: float
     steam_tons: float
+    fiber_tons: float
+    additives_kg: float
     model_config = ConfigDict(from_attributes=True)
