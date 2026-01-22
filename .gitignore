@@ -2,8 +2,8 @@ __pycache__/
 *.pyc
 .env
 .coverage
-data/*.db
-data/*.xlsx
+*.db
+*.xlsx
 logs/
 .pytest_cache/
 DEVELOPMENT_PLAN.md

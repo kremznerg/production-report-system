@@ -3,6 +3,13 @@
 Run the ETL pipeline to load data into the database.
 """
 
+import sys
+from pathlib import Path
+
+# Add project root to Python path
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
 from datetime import date
 from src.logging_config import setup_logging
 from src.config import settings
