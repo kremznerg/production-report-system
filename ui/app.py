@@ -104,6 +104,11 @@ PLOTLY_THEME = "plotly_white"
 COLOR_PALETTE = ["#0d6efd", "#6610f2", "#6f42c1", "#d63384", "#dc3545", "#fd7e14", "#ffc107", "#198754", "#20c997", "#0dcaf0"]
 
 # --- DATA HELPERS ---
+def load_articles():
+    with get_db() as db:
+        db_articles = db.query(ArticleDB).all()
+        return {a.id: a.name for a in db_articles}
+
 def load_machines():
     with get_db() as db:
         db_machines = db.query(MachineDB).all()
@@ -201,7 +206,7 @@ with st.sidebar:
 # --- MAIN PAGE ---
 col_title, col_logo = st.columns([4, 1])
 with col_title:
-    st.title(f"{machine_options[selected_machine_id]} - Intelligence")
+    st.title(f"{machine_options[selected_machine_id]} Report")
     st.markdown(f"**Performance Analytics Dashboard** | {selected_date.strftime('%B %d, %Y')}")
 
 events, plan, quality, utility = get_daily_summary(selected_machine_id, selected_date)
@@ -274,6 +279,63 @@ else:
             plot_bgcolor="rgba(0,0,0,0)",
         )
         st.plotly_chart(fig_timeline, width="stretch")
+
+        # 2. PRODUCT BREAKDOWN SECTION
+        st.subheader("Production Mix & Volume")
+        df_prod = pd.DataFrame([
+            {
+                "Article": e.article_id if e.article_id else "Unknown",
+                "Weight (kg)": e.weight_kg if e.weight_kg else 0,
+                "Duration (min)": (e.duration_seconds / 60) if e.duration_seconds else 0,
+                "Status": e.status
+            } for e in events if e.event_type == "RUN"
+        ])
+        
+        if not df_prod.empty:
+            # Group by article
+            article_mix = df_prod.groupby("Article").agg({
+                "Weight (kg)": "sum",
+                "Duration (min)": "sum"
+            }).reset_index()
+            # Convert kg to tons
+            article_mix["Tons"] = article_mix["Weight (kg)"] / 1000
+            
+            pm_col1, pm_col2 = st.columns([2, 1])
+            with pm_col1:
+                fig_mix = px.bar(
+                    article_mix, x="Article", y="Tons", 
+                    text_auto='.1f',
+                    title="Volume by Product (Tons)",
+                    color="Article",
+                    template=PLOTLY_THEME,
+                    color_discrete_sequence=COLOR_PALETTE
+                )
+                fig_mix.update_layout(
+                    showlegend=False, 
+                    margin=dict(t=40, b=0, l=0, r=0),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_mix, width="stretch")
+            
+            with pm_col2:
+                fig_time_mix = px.pie(
+                    article_mix, values="Duration (min)", names="Article",
+                    hole=0.4,
+                    title="Run Time Share",
+                    template=PLOTLY_THEME,
+                    color_discrete_sequence=COLOR_PALETTE
+                )
+                fig_time_mix.update_layout(
+                    showlegend=True, 
+                    margin=dict(t=40, b=0, l=0, r=0),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig_time_mix, width="stretch")
+        else:
+            st.info("No production (RUN) events recorded for this period.")
 
         # 3. QUALITY & DETAILS
         c1, c2 = st.columns([2, 1])

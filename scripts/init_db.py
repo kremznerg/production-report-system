@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # Töröljük a régi adatbázis fájlt (clean slate)
     db_path = settings.DATABASE_URL.replace("sqlite:///", "")
     if os.path.exists(db_path):
-        print(f"⚠️  Régi adatbázis törlése: {db_path}")
+        print(f"Régi adatbázis törlése: {db_path}")
         os.remove(db_path)
     
     print("Adatbázis táblák létrehozása...")
