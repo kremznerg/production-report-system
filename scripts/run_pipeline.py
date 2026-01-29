@@ -22,7 +22,14 @@ if __name__ == "__main__":
     # Create pipeline instance
     pipeline = Pipeline()
     
-    # Run full ETL for today
-    pipeline.run_full_load(target_date=date.today())
+    # Run full ETL for the last 30 days (standard demo period)
+    import datetime
+    end_date = date.today()
+    start_date = end_date - datetime.timedelta(days=30)
     
-    print("\n✅ Pipeline completed! Check logs/app.log for details.")
+    current_date = start_date
+    while current_date <= end_date:
+        pipeline.run_full_load(target_date=current_date)
+        current_date += datetime.timedelta(days=1)
+    
+    print(f"\n✅ Pipeline completed for period {start_date} to {end_date}!")

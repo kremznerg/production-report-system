@@ -8,4 +8,5 @@ requests
 openpyxl
 reportlab
 pytest
-openpyxl
+fastapi
+uvicorn

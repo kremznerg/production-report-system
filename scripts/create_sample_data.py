@@ -30,26 +30,27 @@ def create_planning_data() -> None:
         'Target_Tons': []
     }
     
-    # Generate 30 days of data
-    start_date: date = date(2025, 12, 23)  
+    # Generate 30 days of data ending today
+    end_date: date = date.today()
+    start_date: date = end_date - timedelta(days=30)
     machines: List[str] = ['PM1', 'PM2']
     
-    # Article specs - industry-standard containerboard types
-    # Speed inversely related to GSM, Tons directly related to GSM
+    # Article specs - scaled to meet daily production targets
+    # PM1 (33) target: ~590 t/day | PM2 (35) target: ~1370 t/day
     article_specs: Dict[str, Dict[str, float]] = {
-        'KL_150':   {'gsm': 150, 'speed': 800, 'tons': 135},  # Kraftliner - heavy, slower
-        'KL_175':   {'gsm': 175, 'speed': 750, 'tons': 150},  # Kraftliner - heaviest
-        'TL_100':   {'gsm': 100, 'speed': 920, 'tons': 110},  # Testliner - light, fast
-        'TL_140':   {'gsm': 140, 'speed': 850, 'tons': 130},  # Testliner - standard
-        'WTL_120':  {'gsm': 120, 'speed': 880, 'tons': 120},  # White-Top - printable
-        'FL_90':    {'gsm': 90,  'speed': 950, 'tons': 100},  # Fluting - fastest
+        'KL_150':   {'gsm': 150, 'speed': 850,  'tons': 600},  
+        'KL_175':   {'gsm': 175, 'speed': 800,  'tons': 620},  
+        'TL_100':   {'gsm': 100, 'speed': 1100, 'tons': 1200}, 
+        'TL_140':   {'gsm': 140, 'speed': 1000, 'tons': 1300}, 
+        'WTL_120':  {'gsm': 120, 'speed': 1050, 'tons': 1250}, 
+        'FL_90':    {'gsm': 90,  'speed': 1200, 'tons': 1100}, 
     }
     articles: List[str] = list(article_specs.keys())
     
-    # Machine capacity factors (PM2 is slightly slower/older)
+    # Machine capacity scaling to reach the specific targets
     machine_capacity: Dict[str, float] = {
-        'PM1': 1.00,   # 100% reference capacity
-        'PM2': 0.96    # 96% capacity (4% slower)
+        'PM1': 0.95,   # Aims for ~590t (weighted avg of articles)
+        'PM2': 1.05    # Aims for ~1350t (weighted avg of articles)
     }
     
     for day in range(30):
@@ -95,7 +96,9 @@ def create_lab_data() -> None:
         'Strength_kNm': []
     }
     
-    start_date: datetime = datetime(2025, 12, 23, 8, 0, 0)  # Start at 8 AM
+    end_date: date = date.today()
+    start_date_val: date = end_date - timedelta(days=30)
+    start_date: datetime = datetime.combine(start_date_val, datetime.min.time()) + timedelta(hours=8)
     machines: List[str] = ['PM1', 'PM2']
     
     # Quality specs per article (GSM is nominal, with measurement variation)
@@ -153,6 +156,13 @@ def create_lab_data() -> None:
 def create_utilities_data() -> None:
     """Create utilities.xlsx with 30 days of realistic utility consumption data."""
     
+    # Read planning data to get realistic production tons for scaling
+    planning_file = settings.PLANNING_FILE
+    if not planning_file.exists():
+        create_planning_data()
+    
+    df_plan = pd.read_excel(planning_file)
+    
     data: Dict[str, List[Any]] = {
         'Date': [],
         'Machine': [],
@@ -163,54 +173,50 @@ def create_utilities_data() -> None:
         'Additives_kg': []
     }
     
-    start_date: date = date(2025, 12, 23)
-    machines: List[str] = ['PM1', 'PM2']
-    
-    # Base consumption per machine (daily averages)
-    base_consumption: Dict[str, Dict[str, int]] = {
-        'PM1': {
-            'water': 1200,
-            'electricity': 8500,
-            'steam': 95,
-            'fiber': 125,
-            'additives': 450
-        },
-        'PM2': {
-            'water': 1180,
-            'electricity': 8300,
-            'steam': 92,
-            'fiber': 120,
-            'additives': 440
-        }
+    for _, row in df_plan.iterrows():
+        machine = row['Machine']
+        target_tons = row['Target_Tons']
+        
+    # Industry targets provided by user for Machines 33 (PM1) and 35 (PM2)
+    targets = {
+        'PM1': {'elec': 343.93, 'fiber_kg': 1095.0, 'steam': 4.39, 'water': 7.46},
+        'PM2': {'elec': 367.00, 'fiber_kg': 1090.0, 'steam': 3.68, 'water': 7.10}
     }
     
-    for day in range(30):
-        current_date: date = start_date + timedelta(days=day)
+    for _, row in df_plan.iterrows():
+        machine = row['Machine']
+        target_tons = row['Target_Tons']
+        t_data = targets[machine]
         
-        for machine in machines:
-            base: Dict[str, int] = base_consumption[machine]
-            
-            # Add realistic daily variation (±8%)
-            water: float = round(base['water'] * random.uniform(0.92, 1.08), 0)
-            electricity: float = round(base['electricity'] * random.uniform(0.92, 1.08), 0)
-            steam: float = round(base['steam'] * random.uniform(0.92, 1.08), 0)
-            fiber: float = round(base['fiber'] * random.uniform(0.92, 1.08), 0)
-            additives: float = round(base['additives'] * random.uniform(0.92, 1.08), 0)
-            
-            data['Date'].append(current_date)
-            data['Machine'].append(machine)
-            data['Water_m3'].append(water)
-            data['Electricity_kWh'].append(electricity)
-            data['Steam_tons'].append(steam)
-            data['Fiber_tons'].append(fiber)
-            data['Additives_kg'].append(additives)
+        # Fiber: conversion from kg/t to absolute tons (target ~1.09-1.10)
+        fiber = round(target_tons * (t_data['fiber_kg'] / 1000) * random.uniform(0.99, 1.01), 2)
+        
+        # Water: target m3/t
+        water = round(target_tons * t_data['water'] * random.uniform(0.95, 1.05), 1)
+        
+        # Electricity: target kWh/t
+        electricity = round(target_tons * t_data['elec'] * random.uniform(0.98, 1.02), 0)
+        
+        # Steam: target t/t
+        steam = round(target_tons * t_data['steam'] * random.uniform(0.97, 1.03), 2)
+        
+        # Additives: ~12 kg per ton (generic)
+        additives = round(target_tons * random.uniform(10, 15), 1)
+        
+        data['Date'].append(row['Date'])
+        data['Machine'].append(machine)
+        data['Water_m3'].append(water)
+        data['Electricity_kWh'].append(electricity)
+        data['Steam_tons'].append(steam)
+        data['Fiber_tons'].append(fiber)
+        data['Additives_kg'].append(additives)
     
-    df: pd.DataFrame = pd.DataFrame(data)
+    df = pd.DataFrame(data)
     
     file_path: Path = settings.UTILITIES_FILE
     df.to_excel(file_path, index=False)
     print(f"✅ Created: {file_path}")
-    print(f"   - {len(df)} utility records (30 days × 2 machines)")
+    print(f"   - {len(df)} utility records (scaled to production tons)")
 
 
 def main() -> None:

@@ -3,10 +3,10 @@ ETL Pipeline - Extract, Transform, Load
 """
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
-from .extractors.api_client import APIClient
+from .extractors.events_extractor import EventsExtractor
 from .extractors.excel_reader import ExcelReader
 from .database import get_db
 from .models import (
@@ -20,7 +20,7 @@ class Pipeline:
     """Main ETL pipeline orchestrator."""
     
     def __init__(self):
-        self.api_client = APIClient()
+        self.events_extractor = EventsExtractor()
         self.excel_reader = ExcelReader()
     
     def run_full_load(self, target_date: Optional[date] = None):
@@ -37,8 +37,52 @@ class Pipeline:
         
         # 1. Load Excel data (planning, lab, utilities)
         self._load_excel_data()
+
+        # 2. Load Production Events from MES (Source DB)
+        self._load_production_events(target_date)
         
         logger.info("ETL pipeline completed successfully")
+
+    def _load_production_events(self, target_date: date):
+        """Extract events from MES and load into production DB."""
+        logger.info(f"Loading production events for {target_date}...")
+        
+        # A gépek listája (PM1, PM2)
+        machines = ["PM1", "PM2"]
+        
+        for machine_id in machines:
+            events = self.events_extractor.fetch_events(machine_id, target_date)
+            if events:
+                self._save_events(events)
+                logger.info(f"Loaded {len(events)} events for {machine_id}")
+            else:
+                logger.warning(f"No events found for {machine_id} on {target_date}")
+
+    def _save_events(self, events: list):
+        """Save production events to database with cleanup."""
+        if not events:
+            return
+            
+        machine_id = events[0].machine_id
+        # Kiszámoljuk a napot az első eseményből
+        target_date = events[0].timestamp.date()
+        start_dt = datetime.combine(target_date, datetime.min.time())
+        end_dt = datetime.combine(target_date, datetime.max.time())
+
+        with get_db() as db:
+            # ELŐSZÖR TÖRÖLJÜK A RÉGI ADATOKAT ERRE A NAPRA/GÉPRE
+            db.query(ProductionEventDB).filter(
+                ProductionEventDB.machine_id == machine_id,
+                ProductionEventDB.timestamp >= start_dt,
+                ProductionEventDB.timestamp <= end_dt
+            ).delete()
+            
+            # AZUTÁN MENTJÜK AZ ÚJAKAT
+            for event in events:
+                event_data = event.model_dump()
+                db.add(ProductionEventDB(**event_data))
+            
+            logger.info(f"Cleaned up and saved {len(events)} events for {machine_id}")
     
     def _load_excel_data(self):
         """Load all Excel-based data sources."""

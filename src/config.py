@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = f"sqlite:///{DATA_DIR}/production.db"
 
     # --- ADATFORRÁSOK (API & EXCEL) ---
-    API_BASE_URL: str = "https://api.example.com/v1"
+    API_BASE_URL: str = "http://localhost:8000/api"
     
     PLANNING_FILE: Path = DATA_DIR / "planning.xlsx"
     LAB_DATA_FILE: Path = DATA_DIR / "lab_data.xlsx"
