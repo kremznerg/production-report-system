@@ -20,57 +20,67 @@ from src.models import (
     UtilityConsumptionDB
 )
 
-def inspect_database():
-    """Megjeleníti az adatbázis tartalmát."""
+def inspect_db():
+    """Lekérdezi az adatbázis aktuális tartalmát és kiírja a konzolra."""
     print("\n" + "="*60)
-    print("  ADATBÁZIS TARTALOM")
-    print("="*60 + "\n")
+    print("  ADATBÁZIS TARTALOM ELLENŐRZÉSE")
+    print("="*60)
     
     with get_db() as db:
         # Gépek
-        machines = db.query(MachineDB).all()
-        print(f"🔧 Gépek (Machines): {len(machines)}")
-        for machine in machines:
-            print(f"   - {machine.id}: {machine.name}")
-        
+        machine_count = db.query(MachineDB).count()
+        print(f"\n🔧 Gépek (Machines): {machine_count}")
+        for m in db.query(MachineDB).all():
+            print(f"   - {m.id}: {m.name}")
+            
         # Cikkek
-        articles = db.query(ArticleDB).all()
-        print(f"\n📦 Cikkek (Articles): {len(articles)}")
-        for article in articles:
-            print(f"   - {article.id}: {article.name}")
-        
-        # Tervezési adatok
-        planning_count = db.query(ProductionPlanDB).count()
-        print(f"\n📋 Tervezési adatok (Planning): {planning_count} rekord")
-        if planning_count > 0:
+        article_count = db.query(ArticleDB).count()
+        print(f"\n📦 Termékek (Articles): {article_count}")
+        for a in db.query(ArticleDB).limit(10).all():
+            print(f"   - {a.id}: {a.name}")
+            
+        # Tervezés
+        plan_count = db.query(ProductionPlanDB).count()
+        print(f"\n📋 Tervezési adatok (Planning): {plan_count} rekord")
+        if plan_count > 0:
             latest = db.query(ProductionPlanDB).order_by(ProductionPlanDB.date.desc()).first()
             print(f"   Legutóbbi: {latest.date} - {latest.machine_id} - {latest.article_id}")
-        
-        # Minőségi adatok
+
+        # Minőség
         quality_count = db.query(QualityDataDB).count()
         print(f"\n🔬 Minőségi adatok (Quality): {quality_count} rekord")
         if quality_count > 0:
             latest = db.query(QualityDataDB).order_by(QualityDataDB.timestamp.desc()).first()
             print(f"   Legutóbbi: {latest.timestamp} - {latest.machine_id}")
-        
-        # Közműadatok
-        utility_count = db.query(UtilityConsumptionDB).count()
-        print(f"\n⚡ Közműadatok (Utilities): {utility_count} rekord")
-        if utility_count > 0:
+
+        # Közművek
+        util_count = db.query(UtilityConsumptionDB).count()
+        print(f"\n⚡ Közműadatok (Utilities): {util_count} rekord")
+        if util_count > 0:
             latest = db.query(UtilityConsumptionDB).order_by(UtilityConsumptionDB.date.desc()).first()
             print(f"   Legutóbbi: {latest.date} - {latest.machine_id}")
-        
+
         # Production Events
         from src.models import ProductionEventDB
         event_count = db.query(ProductionEventDB).count()
+        run_count = db.query(ProductionEventDB).filter(ProductionEventDB.event_type == "RUN").count()
+        stop_count = db.query(ProductionEventDB).filter(ProductionEventDB.event_type == "STOP").count()
         print(f"\n🏭 Termelési események (Events): {event_count} rekord")
-        if event_count > 0:
-            run_count = db.query(ProductionEventDB).filter(ProductionEventDB.event_type == "RUN").count()
-            stop_count = db.query(ProductionEventDB).filter(ProductionEventDB.event_type == "STOP").count()
-            break_count = db.query(ProductionEventDB).filter(ProductionEventDB.event_type == "BREAK").count()
-            print(f"   RUN: {run_count} | STOP: {stop_count} | BREAK: {break_count}")
+        print(f"   RUN (Gyártás): {run_count} | STOP (Leállás): {stop_count}")
+
+        # Daily Summaries
+        from src.models import DailySummaryDB
+        summary_count = db.query(DailySummaryDB).count()
+        print(f"\n📊 Napi összesítők (Daily Summaries): {summary_count} rekord")
+        if summary_count > 0:
+            latest = db.query(DailySummaryDB).order_by(DailySummaryDB.date.desc()).first()
+            print(f"   Legutóbbi: {latest.date} - {latest.machine_id}")
+            print(f"   - OEE: {latest.oee_pct}% | Termelés: {latest.total_tons} t / Terv: {latest.target_tons} t")
+            print(f"   - Állásidő: {latest.total_downtime_min} perc | Szakadások: {latest.break_count} db")
+            print(f"   - Minőség: Nedvesség {latest.avg_moisture_pct}% | Súly: {latest.avg_gsm_measured} gsm")
+            print(f"   - Fajlagos Rost: {latest.spec_fiber_t_t} t/t | Fajlagos Áram: {latest.spec_electricity_kwh_t} kWh/t")
     
     print("\n" + "="*60 + "\n")
 
 if __name__ == "__main__":
-    inspect_database()
+    inspect_db()

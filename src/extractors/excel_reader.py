@@ -13,106 +13,109 @@ from ..config import settings
 logger = logging.getLogger(__name__)
 
 class ExcelReader:
-    """Generic Excel reader for production data files."""
+    """
+    Általános Excel olvasó osztály.
+    Beolvassa a tervezési, labor és közmű adatokat a megadott fájlokból.
+    """
     
     def read_planning(self) -> List[Dict[str, Any]]:
         """
-        Read daily production plan from Excel.
+        Beolvassa a napi termelési tervet az Excel fájlból.
         
-        Expected columns:
-        - Date, Machine, Article, Target_Speed, Target_Tons
+        Elvárt oszlopok:
+        - Dátum, Gép, Termék, Terv_Sebesség, Terv_Tonna
         
         Returns:
-            List of planning dictionaries
+            Tervezési adatok listája (dict formátumban)
         """
         file_path = settings.PLANNING_FILE
         
         if not file_path.exists():
-            logger.warning(f"Planning file not found: {file_path}")
+            logger.warning(f"Tervezési fájl nem található: {file_path}")
             return []
         
-        logger.info(f"Reading planning data from {file_path}")
+        logger.info(f"Tervezési adatok beolvasása: {file_path}")
         
         try:
             df = pd.read_excel(file_path)
             
-            # Rename columns to match our model
+            # Oszlopok átnevezése a belső modellnek megfelelően
             df.columns = ['date', 'machine_id', 'article_id', 'target_speed', 'target_quantity_tons']
             
-            # Convert date column
+            # Dátum konverzió
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.date
             df.dropna(subset=['date'], inplace=True)
             
             return df.to_dict('records')
             
         except Exception as e:
-            logger.error(f"Error reading planning file: {e}")
+            logger.error(f"Hiba a tervezési fájl olvasásakor: {e}")
             return []
     
     def read_lab_data(self) -> List[Dict[str, Any]]:
         """
-        Read laboratory quality measurements from Excel.
+        Beolvassa a laboratóriumi minőségi méréseket.
         
-        Expected columns:
-        - Timestamp, Machine, Article, Moisture_%, GSM, Strength_kNm
+        Elvárt oszlopok:
+        - Időbélyeg, Gép, Termék, Nedvesség_%, Súly_GSM, Szilárdság_kNm
         
         Returns:
-            List of quality measurement dictionaries
+            Minőségi mérések listája (dict formátumban)
         """
         file_path = settings.LAB_DATA_FILE
         
         if not file_path.exists():
-            logger.warning(f"Lab data file not found: {file_path}")
+            logger.warning(f"Labor adatfájl nem található: {file_path}")
             return []
         
-        logger.info(f"Reading lab data from {file_path}")
+        logger.info(f"Labor adatok beolvasása: {file_path}")
         
         try:
             df = pd.read_excel(file_path)
             
-            # Rename columns
+            # Oszlopok átnevezése
             df.columns = ['timestamp', 'machine_id', 'article_id', 'moisture_pct', 'gsm_measured', 'strength_knm']
             
-            # Convert timestamp
+            # Időbélyeg konverzió
             df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
             df.dropna(subset=['timestamp'], inplace=True)
             
             return df.to_dict('records')
             
         except Exception as e:
-            logger.error(f"Error reading lab data: {e}")
+            logger.error(f"Hiba a labor fájl olvasásakor: {e}")
             return []
     
     def read_utilities(self) -> List[Dict[str, Any]]:
         """
-        Read utility consumption data from Excel.
+        Beolvassa a közműfogyasztási adatokat.
         
-        Expected columns:
-        - Date, Machine, Water_m3, Electricity_kWh, Steam_tons, Fiber_tons, Additives_kg
+        Elvárt oszlopok:
+        - Dátum, Gép, Víz_m3, Áram_kWh, Gőz_tonna, Rost_tonna, Adalékanyag_kg
         
         Returns:
-            List of utility consumption dictionaries
+            Közműadatok listája (dict formátumban)
         """
         file_path = settings.UTILITIES_FILE
         
         if not file_path.exists():
-            logger.warning(f"Utilities file not found: {file_path}")
+            logger.warning(f"Közmű adatfájl nem található: {file_path}")
             return []
         
-        logger.info(f"Reading utilities data from {file_path}")
+        logger.info(f"Közműadatok beolvasása: {file_path}")
         
         try:
             df = pd.read_excel(file_path)
             
-            # Rename columns
+            # Oszlopok átnevezése
             df.columns = ['date', 'machine_id', 'water_m3', 'electricity_kwh', 'steam_tons', 'fiber_tons', 'additives_kg']
             
-            # Convert date
+            # Dátum konverzió
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.date
             df.dropna(subset=['date'], inplace=True)
             
             return df.to_dict('records')
             
         except Exception as e:
-            logger.error(f"Error reading utilities data: {e}")
+            logger.error(f"Hiba a közmű fájl olvasásakor: {e}")
             return []

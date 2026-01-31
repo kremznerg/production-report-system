@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from sqlalchemy import func
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import sys
@@ -14,7 +15,9 @@ from src.database import get_db
 from src.models import (
     MachineDB, ArticleDB, ProductionEventDB, 
     ProductionPlanDB, QualityDataDB, UtilityConsumptionDB,
-    Machine, ProductionEvent, ProductionPlan, QualityMeasurement, UtilityData
+    DailySummaryDB,
+    Machine, ProductionEvent, ProductionPlan, QualityMeasurement, UtilityData,
+    DailySummary
 )
 from src.pipeline import Pipeline
 
@@ -104,23 +107,25 @@ PLOTLY_THEME = "plotly_white"
 COLOR_PALETTE = ["#0d6efd", "#6610f2", "#6f42c1", "#d63384", "#dc3545", "#fd7e14", "#ffc107", "#198754", "#20c997", "#0dcaf0"]
 
 # --- DATA HELPERS ---
-def load_articles():
+def load_articles() -> Dict[str, str]:
+    """Betölti a termék törzsadatokat az adatbázisból."""
     with get_db() as db:
         db_articles = db.query(ArticleDB).all()
         return {a.id: a.name for a in db_articles}
 
-def load_machines():
+def load_machines() -> List[Machine]:
+    """Betölti a gép törzsadatokat és Pydantic modellekké alakítja őket."""
     with get_db() as db:
         db_machines = db.query(MachineDB).all()
-        # Átalakítjuk Pydantic modellekké, így nem lesz DetachedInstanceError
         return [Machine.model_validate(m) for m in db_machines]
 
-def get_daily_summary(machine_id, target_date):
+def get_daily_data(machine_id: str, target_date: date):
+    """Lekéri a nyers eseményeket és az előre kalkulált napi összesítőt is."""
     with get_db() as db:
-        # Get events
         start_dt = datetime.combine(target_date, datetime.min.time())
         end_dt = datetime.combine(target_date, datetime.max.time())
         
+        # 1. Nyers események (idővonalhoz és lebontáshoz)
         db_events = db.query(ProductionEventDB).filter(
             ProductionEventDB.machine_id == machine_id,
             ProductionEventDB.timestamp >= start_dt,
@@ -128,14 +133,14 @@ def get_daily_summary(machine_id, target_date):
         ).all()
         events = [ProductionEvent.model_validate(e) for e in db_events]
         
-        # Get plans
-        db_plan = db.query(ProductionPlanDB).filter(
-            ProductionPlanDB.machine_id == machine_id,
-            ProductionPlanDB.date == target_date
+        # 2. Előre kalkulált napi összesítő
+        db_summary = db.query(DailySummaryDB).filter(
+            DailySummaryDB.machine_id == machine_id,
+            DailySummaryDB.date == target_date
         ).first()
-        plan = ProductionPlan.model_validate(db_plan) if db_plan else None
+        summary = DailySummary.model_validate(db_summary) if db_summary else None
         
-        # Get quality
+        # 3. Minőségi adatok (grafikonokhoz)
         db_quality = db.query(QualityDataDB).filter(
             QualityDataDB.machine_id == machine_id,
             QualityDataDB.timestamp >= start_dt,
@@ -143,16 +148,10 @@ def get_daily_summary(machine_id, target_date):
         ).all()
         quality = [QualityMeasurement.model_validate(q) for q in db_quality]
 
-        # Get utilities
-        db_utility = db.query(UtilityConsumptionDB).filter(
-            UtilityConsumptionDB.machine_id == machine_id,
-            UtilityConsumptionDB.date == target_date
-        ).first()
-        utility = UtilityData.model_validate(db_utility) if db_utility else None
-        
-        return events, plan, quality, utility
+        return events, summary, quality
 
-def get_pareto_data(machine_id, days=30):
+def get_pareto_data(machine_id: str, days: int = 30) -> pd.DataFrame:
+    """Lekéri az elmúlt X nap leállási okait Pareto elemzéshez."""
     with get_db() as db:
         end_date = date.today()
         start_date = end_date - timedelta(days=days)
@@ -168,284 +167,358 @@ def get_pareto_data(machine_id, days=30):
             
         data = []
         for s in stops:
-            reason = s.description if s.description else "Unknown"
+            reason = s.description if s.description else "Ismeretlen"
             duration = (s.duration_seconds / 60) if s.duration_seconds else 0
-            data.append({"Reason": reason, "Duration (min)": duration})
+            data.append({"Ok": reason, "Időtartam (perc)": duration})
             
         df = pd.DataFrame(data)
-        pareto = df.groupby("Reason")["Duration (min)"].sum().reset_index()
-        return pareto.sort_values(by="Duration (min)", ascending=False).head(5)
+        pareto = df.groupby("Ok")["Időtartam (perc)"].sum().reset_index()
+        return pareto.sort_values(by="Időtartam (perc)", ascending=False).head(5)
 
 
-# --- SIDEBAR ---
+# --- ADAT SEGÉDFÜGGVÉNYEK ---
+def get_data_availability():
+    """Lekéri az adatbázisból az elérhető dátumtartományt."""
+    with get_db() as db:
+        res = db.query(
+            func.min(ProductionEventDB.timestamp),
+            func.max(ProductionEventDB.timestamp),
+            func.count(ProductionEventDB.id)
+        ).first()
+        return res
+
+# --- OLDALSÁV (SIDEBAR) ---
 with st.sidebar:
     st.image(str(project_root / "assets" / "factory.png"), width=100)
-    st.title("Control Panel")
+    st.title("Vezérlőpult")
     st.markdown("---")
     
-    # 1. Selection
-    machines = load_machines()
-    machine_options = {m.id: m.name for m in machines}
-    selected_machine_id = st.selectbox("OPERATING UNIT", options=list(machine_options.keys()), format_func=lambda x: machine_options[x], help="Select the paper machine to analyze")
+    # 1. Adat Elérhetőség Infó
+    min_date, max_date, total_events = get_data_availability()
+    if total_events > 0:
+        st.info(f"**Elérhető adatok:**\n\n{min_date.strftime('%Y-%m-%d')} — {max_date.strftime('%Y-%m-%d')}")
+    else:
+        st.warning("⚠️ Az adatbázis üres!")
+
+    st.markdown("---")
     
-    selected_date = st.date_input("REPORTING DATE", value=date.today() - timedelta(days=1))
+    # 2. Gép és dátum választás
+    machines = load_machines()
+    machine_options = {m.id: m.id for m in machines}
+    selected_machine_id = st.selectbox("TERMELŐEGYSÉG", options=list(machine_options.keys()), format_func=lambda x: machine_options[x], help="Válaszd ki az elemzendő papírgépet")
+    
+    selected_date = st.date_input("JELENTÉS DÁTUMA", value=max_date.date() if total_events > 0 else date.today() - timedelta(days=1))
     
     st.divider()
     
-    # 2. Sync Section
-    if st.button("🚀 Sync Data", width="stretch"):
-        with st.spinner(f"Fetching data for {selected_date}..."):
+    # 3. Szinkronizáció
+    if st.button("🚀 Adatok Szinkronizálása", width="stretch"):
+        with st.spinner(f"Adatok lekérése a kiválasztott napra ({selected_date})..."):
             try:
                 pipeline = Pipeline()
                 pipeline.run_full_load(target_date=selected_date)
-                st.success("Sync Complete!")
+                st.success("Sikeres szinkronizáció!")
                 st.balloons()
             except Exception as e:
-                st.error(f"Sync failed: {str(e)}")
+                st.error(f"Hiba történt: {str(e)}")
 
-# --- MAIN PAGE ---
+# --- FŐOLDAL ---
 col_title, col_logo = st.columns([4, 1])
 with col_title:
-    st.title(f"{machine_options[selected_machine_id]} Report")
-    st.markdown(f"**Performance Analytics Dashboard** | {selected_date.strftime('%B %d, %Y')}")
+    st.title(f"{machine_options[selected_machine_id]} Jelentés")
+    st.markdown(f"**Teljesítmény-analitikai Dashboard** | {selected_date.strftime('%Y. %m. %d.')}")
 
-events, plan, quality, utility = get_daily_summary(selected_machine_id, selected_date)
+events, summary, quality = get_daily_data(selected_machine_id, selected_date)
 
 if not events:
-    st.warning("No data found for this date. Please use the 'Sync Data' button in the sidebar.")
+    st.warning("Ezen a napon nem található adat. Használd az 'Adatok Szinkronizálása' gombot az oldalsávban.")
 else:
-    # 1. KPI SECTION (TABS)
-    tab1, tab2, tab3 = st.tabs(["📊 Daily Performance", "⚡ Utilities & Fiber", "📉 Downtime Analysis"])
-    
-    with tab1:
+    # --- 1. KPI SZEKCIÓ (FŐ MUTATÓK ÉS KÖZMŰVEK) ---
+    if summary:
+        # Felső sor: Termelési KPI-ok
         col1, col2, col3, col4 = st.columns(4)
+        prod_delta_pct = (summary.total_tons / summary.target_tons - 1) * 100 if summary.target_tons and summary.target_tons > 0 else 0
+        col1.metric("Termelés", f"{summary.total_tons:.1f} t", 
+                  delta=f"{prod_delta_pct:.1f} %" if summary.target_tons else None,
+                  help=f"A gép által termelt összes papír súlya (nettó tonna).\n\nNapi adatok:\n- Összes: {summary.total_tons:.1f} t\n- Jó termék: {summary.good_tons:.1f} t\n- Selejt: {summary.scrap_tons:.1f} t\n(Cél: {summary.target_tons:.1f} t)")
         
-        total_production = sum(e.weight_kg for e in events if e.event_type == "RUN") / 1000 # Tons
-        scrap_production = sum(e.weight_kg for e in events if e.event_type == "RUN" and e.status == "SCRAP") / 1000
+        col2.metric("OEE Állapot", f"{summary.oee_pct:.1f} %", 
+                  help=f"Teljes Eszközhatékonyság (Overall Equipment Effectiveness).\n\nÖsszetevők:\n- Rendelkezésre állás: {summary.availability_pct}%\n- Teljesítmény: {summary.performance_pct}%\n- Minőség: {summary.quality_pct}%")
         
-        run_events = [e for e in events if e.event_type == "RUN"]
-        avg_speed = sum(e.average_speed for e in run_events) / len(run_events) if run_events else 0
-        target_speed = plan.target_speed if plan else 0
-        speed_util = (avg_speed / target_speed * 100) if target_speed > 0 else 0
+        speed_eff = (summary.avg_speed_m_min / summary.target_speed_m_min * 100) if summary.target_speed_m_min and summary.target_speed_m_min > 0 else 0
+        col3.metric("Sebesség index", f"{speed_eff:.1f} %",
+                  help=f"A gép sebességének hatékonysága a tervhez képest.\n\nTényleges: {summary.avg_speed_m_min:.0f} m/min\nTerv: {summary.target_speed_m_min:.0f} m/min")
         
-        run_time = sum(e.duration_seconds for e in events if e.event_type == "RUN")
-        total_time = sum(e.duration_seconds for e in events)
-        time_util = (run_time / total_time * 100) if total_time > 0 else 0
-        
-        target_qty = plan.target_quantity_tons if plan else 0
-        
-        col1.metric("Production", f"{total_production:.1f} t", delta=f"{total_production - target_qty:.1f} t" if target_qty else None, help="Total weight of paper produced by the machine in metric tons.")
-        col2.metric("Time Utilization", f"{time_util:.1f} %", help="Percentage of total time the machine was actively producing paper (OEE - Availability).")
-        col3.metric("Speed Utilization", f"{speed_util:.1f} %", help="Actual average production speed compared to the target speed set in the plan.")
-        col4.metric("Scrap Rate", f"{(scrap_production/total_production*100):.1f} %" if total_production > 0 else "0%", help="Ratio of non-conforming (scrap) production to total production.")
+        scrap_rate = (summary.scrap_tons / summary.total_tons * 100) if summary.total_tons > 0 else 0
+        col4.metric("Selejtarány", f"{scrap_rate:.1f} %", 
+                  help=f"A nem megfelelő minőségű termelés aránya az összes termeléshez képest.\n\nTechnikai adatok:\n- Összes selejt: {summary.scrap_tons:.1f} t\n- Összes termelés: {summary.total_tons:.1f} t")
 
-        # TIMELINE CHART
-        st.subheader("Daily Production Timeline")
-        df_events = pd.DataFrame([
-            {
-                "Start": e.timestamp,
-                "End": e.timestamp + timedelta(seconds=e.duration_seconds if e.duration_seconds else 0),
-                "Type": e.event_type,
-                "Status": e.status if e.event_type == "RUN" else e.event_type,
-                "Machine": machine_options[selected_machine_id]
-            } for e in events
-        ])
+        # Második sor: Fajlagos mutatók (Utilities)
+        u_col1, u_col2, u_col3, u_col4 = st.columns(4)
         
+        # Abszolút értékek visszaszámolása a fajlagosból
+        total_elec = summary.spec_electricity_kwh_t * summary.total_tons
+        u_col1.metric("⚡ Áram", f"{summary.spec_electricity_kwh_t:.0f} kWh/t", 
+                  help=f"Átlagos elektromos energia fogyasztás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_elec:,.0f} kWh")
+        
+        total_water = summary.spec_water_m3_t * summary.total_tons
+        u_col2.metric("💧 Víz", f"{summary.spec_water_m3_t:.1f} m³/t", 
+                  help=f"Frissvíz felhasználás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_water:,.0f} m³")
+        
+        total_steam = summary.spec_steam_t_t * summary.total_tons
+        u_col3.metric("💨 Gőz", f"{summary.spec_steam_t_t:.2f} t/t", 
+                  help=f"Gőzfelhasználás a szárításhoz 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_steam:.1f} t")
+        
+        total_fiber = summary.spec_fiber_t_t * summary.total_tons
+        u_col4.metric("♻️ Rost", f"{summary.spec_fiber_t_t:.2f} t/t", 
+                  help=f"Felhasznált papírrost mennyisége 1 tonna késztermékre.\n\nÖsszes felhasználás: {total_fiber:.1f} t")
+    else:
+        st.info("A napi összesítés még nincs kiszámolva.")
+        total_production = sum(e.weight_kg for e in events if e.event_type == "RUN") / 1000
+        st.metric("Termelés (Nyers adat)", f"{total_production:.1f} t")
+    
+    st.divider()
+    st.markdown("### Termelési események")
+
+    # --- IDŐVONAL ÉS GÉPÁLLAPOT ELOSZLÁS ---
+    t_col1, t_col2 = st.columns([2, 1])
+    
+    with t_col1:
+        raw_events = [
+            {
+                "Kezdet": e.timestamp,
+                "Vége": e.timestamp + timedelta(seconds=e.duration_seconds if e.duration_seconds else 0),
+                "Típus": e.event_type,
+                "Állapot": e.status if e.event_type == "RUN" else e.event_type,
+                "Termék": e.article_id if e.article_id else "Nincs gyártás",
+                "Gép": machine_options[selected_machine_id]
+            } for e in events
+        ]
+        
+        # --- ÖSSZEOLVASZTÁSI LOGIKA (Gépállapothoz és Termékhez) ---
+        merged_status_events = []
+        if raw_events:
+            current = raw_events[0].copy()
+            for i in range(1, len(raw_events)):
+                nxt = raw_events[i]
+                # Csak akkor olvasztunk össze, ha az állapot ÉS a termék is ugyanaz
+                if nxt["Állapot"] == current["Állapot"] and nxt["Termék"] == current["Termék"]:
+                    current["Vége"] = nxt["Vége"]
+                else:
+                    merged_status_events.append(current)
+                    current = nxt.copy()
+            merged_status_events.append(current)
+        
+        df_events = pd.DataFrame(merged_status_events)
+        if not df_events.empty:
+            df_events["Időtartam_perc"] = (df_events["Vége"] - df_events["Kezdet"]).dt.total_seconds() / 60
+        
+        st.markdown("**Napi Termelési Idővonal**")
         fig_timeline = px.timeline(
             df_events, 
-            x_start="Start", 
-            x_end="End", 
-            y="Machine", 
-            color="Status",
+            x_start="Kezdet", 
+            x_end="Vége", 
+            y="Gép", 
+            color="Állapot",
+            hover_name="Termék",
+            hover_data={
+                "Állapot": True,
+                "Kezdet": "|%H:%M",
+                "Vége": "|%H:%M",
+                "Gép": False,
+                "Termék": False
+            },
             color_discrete_map={
                 "GOOD": "#2ecc71", 
                 "SCRAP": "#e67e22", 
                 "STOP": "#e74c3c", 
                 "BREAK": "#f1c40f"
             },
-            category_orders={"Status": ["GOOD", "SCRAP", "STOP", "BREAK"]},
-            height=250 # Kicsit magasabb, hogy legyen helye
+            category_orders={"Állapot": ["GOOD", "SCRAP", "STOP", "BREAK"]},
+            height=300 
         )
         
-        fig_timeline.update_yaxes(title="", showgrid=False, zeroline=False)
+        fig_timeline.update_yaxes(visible=False)
         fig_timeline.update_xaxes(showgrid=True, gridcolor='rgba(0,0,0,0.05)')
         fig_timeline.update_layout(
             template=PLOTLY_THEME,
             showlegend=True,
             legend_title_text="",
-            margin=dict(t=0, b=0, l=0, r=0),
+            margin=dict(t=30, b=0, l=0, r=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="left", x=0),
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(family="Inter, sans-serif")
         )
-        st.plotly_chart(fig_timeline, width="stretch")
+        st.plotly_chart(fig_timeline, use_container_width=True)
 
-        # 2. PRODUCT BREAKDOWN SECTION
-        st.subheader("Production Mix & Volume")
-        df_prod = pd.DataFrame([
-            {
-                "Article": e.article_id if e.article_id else "Unknown",
-                "Weight (kg)": e.weight_kg if e.weight_kg else 0,
-                "Duration (min)": (e.duration_seconds / 60) if e.duration_seconds else 0,
-                "Status": e.status
-            } for e in events if e.event_type == "RUN"
-        ])
+    with t_col2:
+        st.markdown("**Gépállapot Eloszlás (időben)**")
+        df_states = df_events.groupby("Állapot")["Időtartam_perc"].sum().reset_index(name="Perc")
+        fig_pie_status = px.pie(
+            df_states, values="Perc", names="Állapot", 
+            hole=0.6, 
+            color="Állapot",
+            color_discrete_map={"GOOD": "#2ecc71", "SCRAP": "#e67e22", "STOP": "#e74c3c", "BREAK": "#f1c40f"},
+            template=PLOTLY_THEME,
+            height=320
+        )
+        fig_pie_status.update_layout(
+            margin=dict(t=0, b=0, l=0, r=0),
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5),
+            annotations=[dict(text='Megoszlás', x=0.5, y=0.5, font_size=12, showarrow=False, font_family="Inter")],
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_pie_status, use_container_width=True)
+
+    st.divider()
+
+    # 2. TERMÉK STATISZTIKA
+    st.markdown("### Termékstatisztika")
+    df_prod = pd.DataFrame([
+        {
+            "Termék": e.article_id if e.article_id else "Ismeretlen",
+            "Súly (kg)": e.weight_kg if e.weight_kg else 0,
+            "Időtartam (perc)": (e.duration_seconds / 60) if e.duration_seconds else 0,
+            "Állapot": e.status
+        } for e in events if e.event_type == "RUN"
+    ])
+    
+    if not df_prod.empty:
+        # Csoportosítás termék szerint
+        article_mix = df_prod.groupby("Termék").agg({
+            "Súly (kg)": "sum",
+            "Időtartam (perc)": "sum"
+        }).reset_index()
+        # Tonna konverzió
+        article_mix["Tonna"] = article_mix["Súly (kg)"] / 1000
         
-        if not df_prod.empty:
-            # Group by article
-            article_mix = df_prod.groupby("Article").agg({
-                "Weight (kg)": "sum",
-                "Duration (min)": "sum"
-            }).reset_index()
-            # Convert kg to tons
-            article_mix["Tons"] = article_mix["Weight (kg)"] / 1000
-            
-            pm_col1, pm_col2 = st.columns([2, 1])
-            with pm_col1:
-                fig_mix = px.bar(
-                    article_mix, x="Article", y="Tons", 
-                    text_auto='.1f',
-                    title="Volume by Product (Tons)",
-                    color="Article",
-                    template=PLOTLY_THEME,
-                    color_discrete_sequence=COLOR_PALETTE
-                )
-                fig_mix.update_layout(
-                    showlegend=False, 
-                    margin=dict(t=40, b=0, l=0, r=0),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                )
-                st.plotly_chart(fig_mix, width="stretch")
-            
-            with pm_col2:
-                fig_time_mix = px.pie(
-                    article_mix, values="Duration (min)", names="Article",
-                    hole=0.4,
-                    title="Run Time Share",
-                    template=PLOTLY_THEME,
-                    color_discrete_sequence=COLOR_PALETTE
-                )
-                fig_time_mix.update_layout(
-                    showlegend=True, 
-                    margin=dict(t=40, b=0, l=0, r=0),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                )
-                st.plotly_chart(fig_time_mix, width="stretch")
-        else:
-            st.info("No production (RUN) events recorded for this period.")
-
-        # 3. QUALITY & DETAILS
-        c1, c2 = st.columns([2, 1])
-        with c1:
-            if quality:
-                df_q = pd.DataFrame([
-                    {"Time": q.timestamp, "Moisture %": q.moisture_pct, "GSM": q.gsm_measured, "Strength": q.strength_knm} 
-                    for q in quality
-                ]).sort_values("Time")
-                
-                from plotly.subplots import make_subplots
-                
-                # Setup 3 subplots (vertical)
-                fig_q = make_subplots(
-                    rows=3, cols=1, 
-                    shared_xaxes=True,
-                    vertical_spacing=0.05,
-                    subplot_titles=("Grammage (GSM)", "Strength (kNm)", "Moisture %")
-                )
-                
-                # 1. GSM
-                fig_q.add_trace(go.Scatter(
-                    x=df_q["Time"], y=df_q["GSM"],
-                    name="GSM", mode="lines+markers",
-                    line=dict(color="#3498db")
-                ), row=1, col=1)
-                
-                # 2. Strength
-                fig_q.add_trace(go.Scatter(
-                    x=df_q["Time"], y=df_q["Strength"],
-                    name="Strength", mode="lines+markers",
-                    line=dict(color="#2ecc71")
-                ), row=2, col=1)
-                
-                # 3. Moisture
-                fig_q.add_trace(go.Scatter(
-                    x=df_q["Time"], y=df_q["Moisture %"],
-                    name="Moisture", mode="lines+markers",
-                    line=dict(color="#e74c3c")
-                ), row=3, col=1)
-                
-                fig_q.update_layout(
-                    height=600,
-                    template=PLOTLY_THEME,
-                    showlegend=False,
-                    margin=dict(t=60, b=40, l=40, r=40),
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(family="Inter, sans-serif")
-                )
-                
-                # Update axes
-                fig_q.update_xaxes(showgrid=True, gridcolor='rgba(0,0,0,0.05)')
-                fig_q.update_yaxes(showgrid=True, gridcolor='rgba(0,0,0,0.05)', autorange=True, fixedrange=False)
-                
-                st.plotly_chart(fig_q, width="stretch")
-            else:
-                st.info("No quality data for this day.")
-        with c2:
-            df_states = df_events.groupby("Status").size().reset_index(name="Count")
-            fig_pie = px.pie(
-                df_states, values="Count", names="Status", 
-                hole=0.6, 
-                color="Status",
-                color_discrete_map={"GOOD": "#2ecc71", "SCRAP": "#e67e22", "STOP": "#e74c3c", "BREAK": "#f1c40f"},
-                template=PLOTLY_THEME
-            )
-            fig_pie.update_layout(
-                margin=dict(t=40, b=0, l=0, r=0),
-                showlegend=False,
-                annotations=[dict(text='Distribution', x=0.5, y=0.5, font_size=14, showarrow=False, font_family="Inter")],
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-            )
-            st.plotly_chart(fig_pie, width="stretch")
-
-    with tab2:
-        st.subheader("Specific Consumption (Per Ton)")
-        if utility and total_production > 0:
-            u_col1, u_col2, u_col3, u_col4 = st.columns(4)
-            u_col1.metric("⚡ Electricity", f"{utility.electricity_kwh / total_production:.1f} kWh/t", help="Total electrical energy consumed per metric ton of paper produced.")
-            u_col2.metric("💧 Water", f"{utility.water_m3 / total_production:.1f} m³/t", help="Fresh water consumption per metric ton of paper produced.")
-            u_col3.metric("💨 Steam", f"{utility.steam_tons / total_production:.1f} t/t", help="Steam energy used for drying per metric ton of paper produced.")
-            u_col4.metric("♻️ Recovered Paper", f"{utility.fiber_tons / total_production:.2f} t/t", help="Amount of waste paper (recovered fiber) used per metric ton of finished product.")
-            
-            st.divider()
-            st.subheader("Additive Usage")
-            st.info(f"Total additives consumed: {utility.additives_kg:.1f} kg")
-        else:
-            st.warning("Utility data or production records missing for this date.")
-
-    with tab3:
-        st.subheader("Top 5 Downtime Reasons (Last 30 Days)")
-        pareto_df = get_pareto_data(selected_machine_id)
-        if not pareto_df.empty:
-            fig_pareto = px.bar(
-                pareto_df, x="Reason", y="Duration (min)", 
-                color="Reason",
+        pm_col1, pm_col2 = st.columns([2, 1])
+        with pm_col1:
+            fig_mix = px.bar(
+                article_mix, x="Termék", y="Tonna", 
+                text_auto='.1f',
+                title="Mennyiség Termékenként (Tonna)",
+                color="Termék",
                 template=PLOTLY_THEME,
                 color_discrete_sequence=COLOR_PALETTE
             )
-            fig_pareto.update_layout(
-                margin=dict(t=20, b=20, l=0, r=0),
+            fig_mix.update_layout(
+                showlegend=False, 
+                margin=dict(t=40, b=0, l=0, r=0),
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
-                showlegend=False
             )
-            st.plotly_chart(fig_pareto, width="stretch")
-        else:
-            st.info("Not enough data for Pareto analysis yet.")
+            st.plotly_chart(fig_mix, width="stretch")
+        
+        with pm_col2:
+            fig_time_mix = px.pie(
+                article_mix, values="Időtartam (perc)", names="Termék",
+                hole=0.4,
+                title="Futásidő Megoszlás",
+                template=PLOTLY_THEME,
+                color_discrete_sequence=COLOR_PALETTE
+            )
+            fig_time_mix.update_layout(
+                showlegend=True, 
+                margin=dict(t=40, b=0, l=0, r=0),
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_time_mix, width="stretch")
+    else:
+        st.info("Ezen a napon nem rögzítettek termelési (RUN) eseményt.")
+
+    st.divider()
+
+    # --- 4. MINŐSÉGI TRENDEK (TRENDS) ---
+    st.markdown("### Minőségi analitika")
+    if quality:
+        df_q = pd.DataFrame([
+            {
+                "Idő": q.timestamp, 
+                "Nedvesség %": q.moisture_pct, 
+                "Súly (GSM)": q.gsm_measured, 
+                "Szilárdság": q.strength_knm,
+                "Termék": q.article_id
+            } 
+            for q in quality
+        ]).sort_values("Idő")
+        
+        from plotly.subplots import make_subplots
+        fig_q = make_subplots(
+            rows=3, cols=1, 
+            shared_xaxes=True,
+            vertical_spacing=0.07,
+            subplot_titles=("Grammsúly (GSM)", "Szakítószilárdság (kNm)", "Nedvesség %")
+        )
+        # 1. GSM
+        fig_q.add_trace(go.Scatter(
+            x=df_q["Idő"], y=df_q["Súly (GSM)"], 
+            name="GSM", mode="lines+markers",
+            line=dict(color="#3498db"),
+            customdata=df_q["Termék"],
+            hovertemplate="<b>Idő: %{x}</b><br>GSM: %{y:.1f}<br>Termék: %{customdata}<extra></extra>"
+        ), row=1, col=1)
+        
+        # 2. Szilárdság
+        fig_q.add_trace(go.Scatter(
+            x=df_q["Idő"], y=df_q["Szilárdság"], 
+            name="Szilárdság", mode="lines+markers",
+            line=dict(color="#2ecc71"),
+            customdata=df_q["Termék"],
+            hovertemplate="<b>Idő: %{x}</b><br>Knm: %{y:.1f}<br>Termék: %{customdata}<extra></extra>"
+        ), row=2, col=1)
+        
+        # 3. Nedvesség
+        fig_q.add_trace(go.Scatter(
+            x=df_q["Idő"], y=df_q["Nedvesség %"], 
+            name="Nedvesség", mode="lines+markers",
+            line=dict(color="#e74c3c"),
+            customdata=df_q["Termék"],
+            hovertemplate="<b>Idő: %{x}</b><br>Nedvesség %: %{y:.1f}<br>Termék: %{customdata}<extra></extra>"
+        ), row=3, col=1)
+        
+        fig_q.update_layout(
+            height=650, 
+            template=PLOTLY_THEME, 
+            showlegend=True,
+            legend=dict(orientation="h", yanchor="bottom", y=-0.1, xanchor="center", x=0.5),
+            margin=dict(t=60, b=100, l=40, r=40)
+        )
+        fig_q.update_xaxes(showgrid=True, gridcolor='rgba(0,0,0,0.05)')
+        fig_q.update_yaxes(showgrid=True, gridcolor='rgba(0,0,0,0.05)', autorange=True)
+        st.plotly_chart(fig_q, use_container_width=True)
+    else:
+        st.info("Nincsenek laboradatok ehhez az időszakhoz.")
+
+    st.divider()
+
+    # --- 5. LEÁLLÁS ANALÍZIS (DOWNTIME) ---
+    st.markdown("### Termelési zavarok")
+    if summary:
+        d_col1, d_col2 = st.columns([1, 2])
+        with d_col1:
+            st.metric("⏱️ Összes Állásidő", f"{summary.total_downtime_min:.0f} perc")
+            st.metric("✂️ Szakadásszám", f"{summary.break_count} db")
+        
+        with d_col2:
+            pareto_df = get_pareto_data(selected_machine_id)
+            if not pareto_df.empty:
+                fig_pareto = px.bar(
+                    pareto_df, x="Ok", y="Időtartam (perc)", 
+                    title="Leggyakoribb Leállási Okok (30 nap)", 
+                    color="Ok", template=PLOTLY_THEME, height=300
+                )
+                fig_pareto.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
+                st.plotly_chart(fig_pareto, use_container_width=True)
+            else:
+                st.info("Nincs elég adat a Pareto elemzéshez.")
+    else:
+        st.info("Az összesítés hiányában a leállási statisztika nem elérhető.")
 
 st.divider()
-st.caption("Production Report System v1.0 | Academic Project 2026")
+st.caption("Termelési Jelentési Rendszer v1.0 | Kremzner Gábor 2026")

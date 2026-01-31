@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
+from typing import Generator
 
 from .config import settings
 from .models import Base
@@ -15,7 +16,7 @@ engine = create_engine(
 # Session factory (adatbázis munkamenetekhez)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def init_db():
+def init_db() -> None:
     """
     Létrehozza az összes táblát az adatbázisban (ha még nem léteznek).
     Ezt egyszer kell meghívni a projekt indulásakor.
@@ -24,13 +25,10 @@ def init_db():
     print(f"Adatbázis inicializálva: {settings.DATABASE_URL}")
 
 @contextmanager
-def get_db():
+def get_db() -> Generator[Session, None, None]:
     """
     Context manager az adatbázis munkamenetek kezeléséhez.
-    Használat:
-        with get_db() as db:
-            db.add(new_object)
-            db.commit()
+    Biztosítja az automatikus commit/rollback műveleteket.
     """
     db = SessionLocal()
     try:

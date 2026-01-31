@@ -61,7 +61,7 @@ STOP_REASONS = [
 # Global planning cache
 PLANNING_DATA = None
 
-def get_planning_tons(target_date, machine_id):
+def get_day_planning(target_date, machine_id):
     global PLANNING_DATA
     if PLANNING_DATA is None:
         planning_file = settings.PLANNING_FILE
@@ -75,9 +75,7 @@ def get_planning_tons(target_date, machine_id):
         (PLANNING_DATA['Date'].dt.date == target_date) & 
         (PLANNING_DATA['Machine'] == machine_id)
     ]
-    if not day_plan.empty:
-        return day_plan.iloc[0]['Target_Tons']
-    return None
+    return day_plan
 
 def generate_events_for_day(target_date, machine_id):
     """Egy nap eseményeit generálja egy gépre."""
@@ -86,24 +84,29 @@ def generate_events_for_day(target_date, machine_id):
     events = []
     current_time = datetime.combine(target_date, datetime.min.time())
     end_time = current_time + timedelta(days=1)
+
+    # Get target production and article for this day from plan
+    day_plan = get_day_planning(target_date, machine_id)
     
-    current_article = random.choice(ARTICLES)
-    
-    # Get target production for this day
-    target_tons = get_planning_tons(target_date, machine_id)
-    if not target_tons:
+    if day_plan is not None and not day_plan.empty:
+        target_tons = day_plan['Target_Tons'].sum()
+        planned_articles = day_plan['Article'].tolist()
+    else:
         target_tons = random.uniform(100, 150) # Fallback
+        planned_articles = [random.choice(ARTICLES)]
+    
+    current_article = planned_articles[0]
     
     # We estimate total RUN intervals to scale weight
-    # 24 hours * 4 (15min intervals) * 0.85 (uptime probability)
-    estimated_run_intervals = (24 * 60 / EVENT_INTERVAL_MINUTES) * 0.85
+    # 24 hours * 4 (15min intervals) * 0.88 (uptime probability)
+    estimated_run_intervals = (24 * 60 / EVENT_INTERVAL_MINUTES) * 0.88
     base_weight_per_interval = (target_tons * 1000) / estimated_run_intervals
     
     while current_time < end_time:
         rand = random.random()
         
-        if rand < 0.85:
-            # RUN esemény (85%)
+        if rand < 0.88:
+            # RUN esemény (88%)
             duration = EVENT_INTERVAL_MINUTES * 60
             status = "GOOD" if random.random() < 0.95 else "SCRAP"
             base_speed = random.uniform(750, 900)
@@ -128,8 +131,8 @@ def generate_events_for_day(target_date, machine_id):
             ))
             current_time += timedelta(seconds=duration)
             
-        elif rand < 0.95:
-            # STOP esemény (10%)
+        elif rand < 0.92:
+            # STOP esemény (4%)
             duration = random.randint(10, 45) * 60
             events.append(SourceEvent(
                 timestamp=current_time,
@@ -139,13 +142,13 @@ def generate_events_for_day(target_date, machine_id):
                 weight_kg=0,
                 average_speed=0,
                 machine_id=machine_id,
-                article_id=current_article,
+                article_id=None,
                 description=random.choice(STOP_REASONS)
             ))
             current_time += timedelta(seconds=duration)
             
         else:
-            # BREAK esemény (5%)
+            # BREAK esemény (8%)
             duration = random.randint(5, 20) * 60
             events.append(SourceEvent(
                 timestamp=current_time,
@@ -155,7 +158,7 @@ def generate_events_for_day(target_date, machine_id):
                 weight_kg=0,
                 average_speed=0,
                 machine_id=machine_id,
-                article_id=current_article,
+                article_id=None,
                 description="Papírszakadás"
             ))
             current_time += timedelta(seconds=duration)
@@ -176,8 +179,13 @@ def generate_events_for_day(target_date, machine_id):
                 ))
                 current_time += timedelta(seconds=duration)
         
-        if random.random() < 0.05:
-            current_article = random.choice(ARTICLES)
+        # Switch article based on time slices (24h / num_articles)
+        if len(planned_articles) > 1:
+            slice_hours = 24 / len(planned_articles)
+            article_index = int(current_time.hour / slice_hours)
+            # Ensure index doesn't overshoot
+            article_index = min(article_index, len(planned_articles) - 1)
+            current_article = planned_articles[article_index]
     
     return events
 
@@ -206,7 +214,7 @@ def main():
     all_events = []
     current_date = start_date
     
-    while current_date < end_date:
+    while current_date <= end_date:
         for machine_id in MACHINES:
             events = generate_events_for_day(current_date, machine_id)
             all_events.extend(events)
