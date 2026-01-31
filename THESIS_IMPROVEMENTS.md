@@ -15,10 +15,10 @@
 - [ ] **Integrációs Tesztek**: Excel olvasók és adatbázis réteg tesztelése.
 - [ ] **Pipeline Teszt**: A teljes folyamat végigfuttatása teszt környezetben.
 
-## 4. Technikai Standardok & Polírozás
-- [x] **Típusvizsgálat (Type Hinting)**: Teljes körű Python Type Hinting bevezetése a forráskódban.
-- [ ] **Konzisztencia**: Angol nyelvű kód és kommentek, magyar/angol UI szétválasztása.
-- [ ] **Dokumentáció**: Adatbázis séma (ERD) és Architektúra diagramok készítése.
+## 5. Vizualizáció és Felhasználói Élmény (UI/UX)
+- [ ] **KPI Sparklines**: Az elmúlt 7 nap trendjének megjelenítése a fő mutatók (OEE, Termelés) mellett apró grafikonokkal.
+- [ ] **Modern Ikonográfia**: Professzionális, egységes ikonrendszer bevezetése a Dashboardon az emojik helyett.
+- [ ] **PDF Export**: Automatikus "Műszaknapló" generálása PDF formátumban a napi eredményekből.
 
 ---
 *Készült a szoftverfejlesztési folyamat monitorozására és a szakdolgozati követelmények teljesítésére.*

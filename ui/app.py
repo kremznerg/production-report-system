@@ -23,8 +23,8 @@ from src.pipeline import Pipeline
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Production Report System",
-    page_icon="📊",
+    page_title="Operations Dashboard",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -175,6 +175,35 @@ def get_pareto_data(machine_id: str, days: int = 30) -> pd.DataFrame:
         pareto = df.groupby("Ok")["Időtartam (perc)"].sum().reset_index()
         return pareto.sort_values(by="Időtartam (perc)", ascending=False).head(5)
 
+def get_trend_data(machine_id: str, target_date: date, days: int = 10):
+    """Lekéri az elmúlt X nap összesítő adatait trendvonalhoz."""
+    with get_db() as db:
+        start_date = target_date - timedelta(days=days-1)
+        db_summaries = db.query(DailySummaryDB).filter(
+            DailySummaryDB.machine_id == machine_id,
+            DailySummaryDB.date >= start_date,
+            DailySummaryDB.date <= target_date
+        ).order_by(DailySummaryDB.date).all()
+        
+        return [DailySummary.model_validate(s) for s in db_summaries]
+
+def render_sparkline(values, color="#0d6efd"):
+    """Létrehoz egy apró trendvonalat (sparkline)."""
+    if not values or len(values) < 2:
+        return None
+        
+    fig = px.line(y=values, template="plotly_white")
+    fig.update_traces(line=dict(color=color, width=3), hoverinfo="skip")
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=5, b=5, l=0, r=0),
+        height=40,
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
 
 # --- ADAT SEGÉDFÜGGVÉNYEK ---
 def get_data_availability():
@@ -192,27 +221,18 @@ with st.sidebar:
     st.image(str(project_root / "assets" / "factory.png"), width=100)
     st.title("Vezérlőpult")
     st.markdown("---")
-    
-    # 1. Adat Elérhetőség Infó
+    # Adat elérhetőség lekérése
     min_date, max_date, total_events = get_data_availability()
-    if total_events > 0:
-        st.info(f"**Elérhető adatok:**\n\n{min_date.strftime('%Y-%m-%d')} — {max_date.strftime('%Y-%m-%d')}")
-    else:
-        st.warning("⚠️ Az adatbázis üres!")
-
-    st.markdown("---")
     
     # 2. Gép és dátum választás
     machines = load_machines()
     machine_options = {m.id: m.id for m in machines}
     selected_machine_id = st.selectbox("TERMELŐEGYSÉG", options=list(machine_options.keys()), format_func=lambda x: machine_options[x], help="Válaszd ki az elemzendő papírgépet")
     
-    selected_date = st.date_input("JELENTÉS DÁTUMA", value=max_date.date() if total_events > 0 else date.today() - timedelta(days=1))
-    
-    st.divider()
-    
+    selected_date = st.date_input("DÁTUM VÁLASZTÁS", value=max_date.date() if total_events > 0 else date.today() - timedelta(days=1))
+        
     # 3. Szinkronizáció
-    if st.button("🚀 Adatok Szinkronizálása", width="stretch"):
+    if st.button("Adatok Szinkronizálása", width="stretch"):
         with st.spinner(f"Adatok lekérése a kiválasztott napra ({selected_date})..."):
             try:
                 pipeline = Pipeline()
@@ -222,13 +242,22 @@ with st.sidebar:
             except Exception as e:
                 st.error(f"Hiba történt: {str(e)}")
 
+    st.markdown("---")
+    with st.expander("Rendszerstátusz"):
+        if total_events > 0:
+            st.caption(f"**Elérhető időszak:**\n{min_date.strftime('%Y-%m-%d')} — {max_date.strftime('%Y-%m-%d')}")
+            st.caption(f"**Események száma:** {total_events:,} db")
+        else:
+            st.warning("Az adatbázis még üres.")
+
 # --- FŐOLDAL ---
 col_title, col_logo = st.columns([4, 1])
 with col_title:
-    st.title(f"{machine_options[selected_machine_id]} Jelentés")
-    st.markdown(f"**Teljesítmény-analitikai Dashboard** | {selected_date.strftime('%Y. %m. %d.')}")
+    st.title(f"{machine_options[selected_machine_id]} Operations Dashboard")
+    st.markdown(f"**Teljesítmény-analitikai dashboard** | {selected_date.strftime('%Y. %m. %d.')}")
 
 events, summary, quality = get_daily_data(selected_machine_id, selected_date)
+trend_summaries = get_trend_data(selected_machine_id, selected_date)
 
 if not events:
     st.warning("Ezen a napon nem található adat. Használd az 'Adatok Szinkronizálása' gombot az oldalsávban.")
@@ -237,40 +266,55 @@ else:
     if summary:
         # Felső sor: Termelési KPI-ok
         col1, col2, col3, col4 = st.columns(4)
+        
+        # 1. Termelés
         prod_delta_pct = (summary.total_tons / summary.target_tons - 1) * 100 if summary.target_tons and summary.target_tons > 0 else 0
-        col1.metric("Termelés", f"{summary.total_tons:.1f} t", 
-                  delta=f"{prod_delta_pct:.1f} %" if summary.target_tons else None,
-                  help=f"A gép által termelt összes papír súlya (nettó tonna).\n\nNapi adatok:\n- Összes: {summary.total_tons:.1f} t\n- Jó termék: {summary.good_tons:.1f} t\n- Selejt: {summary.scrap_tons:.1f} t\n(Cél: {summary.target_tons:.1f} t)")
+        with col1:
+            st.metric("Termelés", f"{summary.total_tons:.1f} t", 
+                    delta=f"{prod_delta_pct:.1f} %" if summary.target_tons else None,
+                    help=f"A gép által termelt összes papír súlya (nettó tonna).\n\n(Cél: {summary.target_tons:.1f} t)")
+            st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), use_container_width=True, config={'displayModeBar': False})
         
-        col2.metric("OEE Állapot", f"{summary.oee_pct:.1f} %", 
-                  help=f"Teljes Eszközhatékonyság (Overall Equipment Effectiveness).\n\nÖsszetevők:\n- Rendelkezésre állás: {summary.availability_pct}%\n- Teljesítmény: {summary.performance_pct}%\n- Minőség: {summary.quality_pct}%")
+        # 2. OEE
+        with col2:
+            st.metric("OEE Állapot", f"{summary.oee_pct:.1f} %", 
+                    help=f"Teljes Eszközhatékonyság (Overall Equipment Effectiveness).")
+            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), use_container_width=True, config={'displayModeBar': False})
         
+        # 3. Sebesség Index
         speed_eff = (summary.avg_speed_m_min / summary.target_speed_m_min * 100) if summary.target_speed_m_min and summary.target_speed_m_min > 0 else 0
-        col3.metric("Sebesség index", f"{speed_eff:.1f} %",
-                  help=f"A gép sebességének hatékonysága a tervhez képest.\n\nTényleges: {summary.avg_speed_m_min:.0f} m/min\nTerv: {summary.target_speed_m_min:.0f} m/min")
+        with col3:
+            st.metric("Sebesség index", f"{speed_eff:.1f} %",
+                    help=f"A gép sebességének hatékonysága a tervhez képest.")
+            trend_speeds = [(s.avg_speed_m_min / s.target_speed_m_min * 100) if s.target_speed_m_min > 0 else 0 for s in trend_summaries]
+            st.plotly_chart(render_sparkline(trend_speeds, "#9b59b6"), use_container_width=True, config={'displayModeBar': False})
         
+        # 4. Selejtarány
         scrap_rate = (summary.scrap_tons / summary.total_tons * 100) if summary.total_tons > 0 else 0
-        col4.metric("Selejtarány", f"{scrap_rate:.1f} %", 
-                  help=f"A nem megfelelő minőségű termelés aránya az összes termeléshez képest.\n\nTechnikai adatok:\n- Összes selejt: {summary.scrap_tons:.1f} t\n- Összes termelés: {summary.total_tons:.1f} t")
+        with col4:
+            st.metric("Selejtarány", f"{scrap_rate:.1f} %", 
+                    help=f"A nem megfelelő minőségű termelés aránya.")
+            trend_scraps = [(s.scrap_tons / s.total_tons * 100) if s.total_tons > 0 else 0 for s in trend_summaries]
+            st.plotly_chart(render_sparkline(trend_scraps, "#e74c3c"), use_container_width=True, config={'displayModeBar': False})
 
         # Második sor: Fajlagos mutatók (Utilities)
         u_col1, u_col2, u_col3, u_col4 = st.columns(4)
         
         # Abszolút értékek visszaszámolása a fajlagosból
         total_elec = summary.spec_electricity_kwh_t * summary.total_tons
-        u_col1.metric("⚡ Áram", f"{summary.spec_electricity_kwh_t:.0f} kWh/t", 
+        u_col1.metric("Villamos energia", f"{summary.spec_electricity_kwh_t:.0f} kWh/t", 
                   help=f"Átlagos elektromos energia fogyasztás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_elec:,.0f} kWh")
         
         total_water = summary.spec_water_m3_t * summary.total_tons
-        u_col2.metric("💧 Víz", f"{summary.spec_water_m3_t:.1f} m³/t", 
+        u_col2.metric("Vízfelhasználás", f"{summary.spec_water_m3_t:.1f} m³/t", 
                   help=f"Frissvíz felhasználás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_water:,.0f} m³")
         
         total_steam = summary.spec_steam_t_t * summary.total_tons
-        u_col3.metric("💨 Gőz", f"{summary.spec_steam_t_t:.2f} t/t", 
+        u_col3.metric("Gőzfelhasználás", f"{summary.spec_steam_t_t:.2f} t/t", 
                   help=f"Gőzfelhasználás a szárításhoz 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_steam:.1f} t")
         
         total_fiber = summary.spec_fiber_t_t * summary.total_tons
-        u_col4.metric("♻️ Rost", f"{summary.spec_fiber_t_t:.2f} t/t", 
+        u_col4.metric("Fajlagos rost", f"{summary.spec_fiber_t_t:.2f} t/t", 
                   help=f"Felhasznált papírrost mennyisége 1 tonna késztermékre.\n\nÖsszes felhasználás: {total_fiber:.1f} t")
     else:
         st.info("A napi összesítés még nincs kiszámolva.")
@@ -502,8 +546,8 @@ else:
     if summary:
         d_col1, d_col2 = st.columns([1, 2])
         with d_col1:
-            st.metric("⏱️ Összes Állásidő", f"{summary.total_downtime_min:.0f} perc")
-            st.metric("✂️ Szakadásszám", f"{summary.break_count} db")
+            st.metric("Összes Állásidő", f"{summary.total_downtime_min:.0f} perc")
+            st.metric("Szakadásszám", f"{summary.break_count} db")
         
         with d_col2:
             pareto_df = get_pareto_data(selected_machine_id)
@@ -521,4 +565,4 @@ else:
         st.info("Az összesítés hiányában a leállási statisztika nem elérhető.")
 
 st.divider()
-st.caption("Termelési Jelentési Rendszer v1.0 | Kremzner Gábor 2026")
+st.caption("Operations Dashboard v1.0 | Kremzner Gábor 2026")
