@@ -1,10 +1,20 @@
-# 📊 Production Report System - Demo Projekt
+# 📊 EcoPaper Solutions - Operations Dashboard 🚀
 
-Ez egy **jól strukturált ETL (Extract-Transform-Load) rendszer** termelési jelentések kezeléséhez. A projekt jelenleg **demo/template állapotban** van, de tiszta architektúrát követ és kiváló alapot ad egy komplex reporting rendszer kiépítéséhez.
+Ez egy professzionális, ipari környezetre tervezett **ETL (Extract-Transform-Load) és Vizualizációs rendszer** papírgyári termelési jelentések kezeléséhez. A projekt egy teljes körű megoldást kínál az adatgyűjtéstől az automatizált PDF jelentéskészítésig.
 
-## 🎯 Projekt Célja
+---
 
-A rendszer különböző forrásokból (API, Excel fájlok) gyűjt termelési adatokat, validálja őket, majd egy központi SQLite adatbázisba tölti be. A cél egy egységes, strukturált adatbázis létrehozása, amelyből később riportokat és analitikát lehet készíteni.
+## 🏗️ Főbb Mérföldkövek & Funkciók
+
+A rendszer mára túllépett a demo fázison, és az alábbi professzionális funkciókkal rendelkezik:
+
+- ✅ **Interaktív Dashboard**: Streamlit alapú vezérlőpult KPI mutatókkal, trendgrafikonokkal és Pareto-elemzéssel.
+- ✅ **OEE Számítás**: Teljes eszközhatékonyság (Availability × Performance × Quality) automatikus kalkulációja.
+- ✅ **Automatizált PDF Export**: Nyomdakész, magyar nyelvű napi termelési jelentések generálása céges logóval.
+- ✅ **Adatintegritás**: Pydantic alapú validáció és Upsert logika az adatok duplikációja ellen.
+- ✅ **Unit Tesztelés**: Átfogó tesztcsomag (pytest) a kalkulációs logika és az adatbetöltés ellenőrzésére.
+- ✅ **CI/CD Pipeline**: GitHub Actions integráció, amely minden kódmódosításnál automatikusan futtatja a teszteket.
+- ✅ **Dockerizálás**: Teljes körű konténerizáció a könnyű és gyors telepíthetőség érdekében.
 
 ---
 
@@ -13,288 +23,78 @@ A rendszer különböző forrásokból (API, Excel fájlok) gyűjt termelési ad
 ```
 production-report-system/
 │
-├── data/                      # Adatbázis és input fájlok
-│   ├── production.db         # SQLite adatbázis (generált)
-│   ├── planning.xlsx         # Termelési terv (30 nap × 2 gép = 60 sor)
-│   ├── lab_data.xlsx         # Labor mérések (30 nap × ~8 mérés = ~240 sor)
-│   └── utilities.xlsx        # Közüzemi fogyasztás (30 nap × 2 gép = 60 sor)
-│
-├── logs/                      # Alkalmazás naplók (automatikusan létrejön)
-│   └── app.log               # Részletes log fájl
-│
-├── scripts/                   # Futtatható scriptek
-│   ├── init_db.py            # Adatbázis inicializálás
-│   ├── seed_master_data.py   # Törzsadatok feltöltése
-│   ├── create_sample_data.py # ✨ Minta Excel fájlok generálása
-│   ├── run_pipeline.py       # ETL pipeline futtatása
-│   └── test_logging.py       # Logging rendszer tesztelése
-│
-├── src/                       # Fő forráskód
-│   ├── __init__.py
-│   ├── config.py             # Központi konfiguráció (Pydantic Settings)
-│   ├── database.py           # SQLAlchemy engine és session kezelés
-│   ├── logging_config.py     # Logging beállítások
-│   ├── models.py             # Adatbázis modellek (SQLAlchemy + Pydantic)
-│   ├── pipeline.py           # Fő ETL pipeline orchestrator
-│   │
-│   ├── extractors/           # Adatforrás extractorok
-│   │   ├── __init__.py
-│   │   ├── api_client.py     # API client (termelési események)
-│   │   └── excel_reader.py   # Excel olvasó (planning, lab, utilities)
-│   │
-│   ├── transformers/         # (Üres - jövőbeli data transformation logika)
-│   │   └── __init__.py
-│   │
-│   └── reports/              # (Üres - jövőbeli report generálás)
-│       └── __init__.py
-│
-├── .env.example              # Környezeti változók sablon
-├── .gitignore               # Git ignore szabályok
-├── requirements.txt         # Python függőségek
-└── README.md                # Ez a fájl
+├── .github/workflows/         # CI/CD konfiguráció (GitHub Actions)
+├── assets/                    # Céges logó és UI ikonok
+├── data/                      # SQLite adatbázis és bemeneti Excel fájlok
+├── logs/                      # Rendszernaplók (app.log)
+├── scripts/                   # Karbantartó és adatgeneráló scriptek
+├── src/                       # Üzleti logika (Pipeline, Kalkulációk, Modellek)
+│   ├── extractors/            # Adatforrás kezelők (Excel, MES API)
+│   ├── transformers/          # KPI és OEE számítási logika
+│   └── reports/               # Jelentéskészítő modulok
+├── tests/                     # Unit és Integrációs tesztek (pytest)
+├── ui/                        # Streamlit Dashboard forráskódja
+│   └── pdf_export.py          # PDF generáló motor (ReportLab)
+├── Dockerfile                 # Konténer recept
+├── docker-compose.yml         # Többkonténeres futtatási konfiguráció
+└── requirements.txt           # Python függőségek
 ```
 
 ---
 
-## 🗄️ Adatbázis Modellek
+## 🚀 Gyorsindítás (Getting Started)
 
-A rendszer **6 fő táblával** dolgozik:
-
-### **1. Törzsadatok (Master Data)**
-
-| Tábla | Leírás | Kulcs Mezők |
-|-------|--------|-------------|
-| **`machines`** | Gép törzsadatok | `id` (PM1, PM2), `name`, `location` |
-| **`articles`** | Termék törzsadatok | `id` (cikkszám), `name`, `nominal_gsm`, `product_group` |
-
-### **2. Tranzakciós adatok (Fact Tables)**
-
-| Tábla | Leírás | Adatforrás | Kulcs Mezők |
-|-------|--------|------------|-------------|
-| **`production_events`** | Termelési események | API | `timestamp`, `machine_id`, `article_id`, `weight_kg`, `average_speed` |
-| **`production_plans`** | Gyártási terv | Excel | `date`, `machine_id`, `article_id`, `target_quantity_tons`, `target_speed` |
-| **`quality_reports`** | Labor minőségi mérések | Excel | `timestamp`, `machine_id`, `article_id`, `moisture_pct`, `gsm_measured`, `strength_knm` |
-| **`utility_consumption`** | Közüzemi fogyasztás | Excel | `date`, `machine_id`, `water_m3`, `electricity_kwh`, `steam_tons`, `fiber_tons` |
-
----
-
-## 🔄 ETL Pipeline Működése
-
-A `pipeline.py` központi orchestrator, amely:
-
-### **1. Extract (Kinyerés)**
-- **API-ból**: termelési események lekérése (jelenleg placeholder URL)
-- **Excel fájlokból**: planning, labor és utility adatok beolvasása pandas segítségével
-
-### **2. Transform (Transzformáció)**
-- **Pydantic validáció**: típusellenőrzés, kötelező mezők
-- **Dátum konverziók**: egységes datetime/date formátum
-- **Hibás adatok kiszűrése**: ValidationError esetén log + skip
-
-### **3. Load (Betöltés)**
-- **SQLAlchemy ORM-el** adatbázisba írás
-- **Tranzakció kezelés**: automatikus commit/rollback
-- **Context manager** alapú session kezelés
-
----
-
-## ⚙️ Technológiai Stack
-
-| Kategória | Technológia | Verzió Követelmény | Cél |
-|-----------|-------------|-------------------|-----|
-| **Nyelv** | Python | 3.9+ | Core nyelv |
-| **Adatbázis** | SQLite | beépített | Könnyű, fájl alapú adatbázis |
-| **ORM** | SQLAlchemy | latest | Adatbázis absztrakció |
-| **Validáció** | Pydantic | 2.x | Típus és adatvalidáció |
-| **Konfiguráció** | pydantic-settings | latest | .env alapú környezeti változók |
-| **Data Processing** | Pandas | latest | Excel adatok beolvasása |
-| **Excel olvasás** | openpyxl | latest | .xlsx fájl kezelés |
-| **HTTP Kliens** | Requests | latest | API kommunikáció |
-| **Logging** | Python logging | beépített | Strukturált naplózás |
-
----
-
-## 🚀 Használat
-
-### **1. Első indítás (Setup)**
+### **A) Futtatás Dockerrel (Ajánlott)**
+A legegyszerűbb módja a rendszer indításának, nem igényel helyi Python telepítést:
 
 ```bash
-# 1. Lépj be a projekt könyvtárba
-cd production-report-system
-
-# 2. Környezet beállítása (opcionális)
-cp .env.example .env
-# Szerkeszd a .env fájlt a saját útvonalaiddal, ha szükséges
-
-# 3. Függőségek telepítése
-pip install -r requirements.txt
-
-# 4. Adatbázis inicializálás
-python scripts/init_db.py
-
-# 5. Törzsadatok feltöltése (demo gépek és termékek)
-python scripts/seed_master_data.py
-
-# 6. ✨ Minta Excel fájlok létrehozása (demo adatok)
-python scripts/create_sample_data.py
+docker-compose up --build
 ```
+Ezután nyisd meg a böngészőben: `http://localhost:8501`
 
-### **2. ETL Pipeline futtatása**
+### **B) Helyi futtatás (Fejlesztéshez)**
+
+1. **Függőségek telepítése:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Adatbázis és mintaadatok inicializálása:**
+   ```bash
+   python scripts/init_db.py
+   python scripts/seed_master_data.py
+   python scripts/create_sample_data.py
+   ```
+
+3. **Pipeline és Dashboard indítása:**
+   ```bash
+   python scripts/run_pipeline.py
+   streamlit run ui/app.py
+   ```
+
+---
+
+## 🧪 Minőségbiztosítás (Testing)
+
+A projekt kiemelt figyelmet fordít a stabilitásra. A tesztek futtatása:
 
 ```bash
-# Most már teljesen működik demo adatokkal!
-python scripts/run_pipeline.py
-
-# Ellenőrizd a naplókat
-cat logs/app.log   # Linux/Mac
-type logs\app.log  # Windows
+PYTHONPATH=. pytest tests/
 ```
 
----
-
-## 📋 Főbb Jellemzők
-
-✅ **Tiszta architektúra** - Szeparált extractors, models, pipeline  
-✅ **Típusbiztos validáció** - Pydantic modellek minden data layeren  
-✅ **Konfiguráció központosítva** - Environment variables (.env)  
-✅ **Strukturált logging** - Fájlba (INFO+) és konzolra (WARNING+)  
-✅ **Context manager pattern** - Biztonságos adatbázis műveletek, automatikus rollback  
-✅ **Moduláris design** - Könnyen bővíthető új adatforrásokkal  
-✅ **Type hints** - Teljes kód type annotációkkal  
-✅ **Error handling** - Try-except blokkok + logging
+Minden `push` művelet után a **GitHub Actions** automatikusan elvégzi ezt az ellenőrzést, biztosítva, hogy csak működő kód kerüljön a tárolóba.
 
 ---
 
-## 🔧 Fejlesztési Lehetőségek
+## 📞 Kapcsolat és Fejlesztés
 
-A projekt jelenleg egy **működőképes demo**, amit már lehet tesztelni minta adatokkal!
+A projekt az **EcoPaper Solutions** fiktív vállalat számára készült ipari esettanulmányként. 
 
-### **✅ Elkészült funkciók**
-1. ✅ **Adatbázis struktúra** - SQLite alapú, 6 táblával
-2. ✅ **ETL Pipeline** - Excel fájlok beolvasása és betöltése
-3. ✅ **Minta adat generálás** - `create_sample_data.py` script
-4. ✅ **Logging rendszer** - File és konzol alapú naplózás
-5. ✅ **Validáció** - Pydantic modellek minden szinten
-
-### **Továbbfejlesztési lehetőségek**
-1. ⚠️ **Valós API integráció** - Az `api_client.py`-ban placeholder URL van
-2. 📊 **Transformers logika** - Komplex számítások (napi összesítések, hatékonyság mutatók)
-3. 📈 **Dashboard** - Streamlit alapú vizualizáció
-4. 📝 **Report generálás** - PDF/Excel riportok készítése
-5. ⏰ **Ütemezett futtatás** - Cron job / Windows Task Scheduler integráció
-6. 🔔 **Alert rendszer** - Email/Slack értesítések hibák esetén
-7. 🔄 **Retry logika** - API hívások újrapróbálása
-8. 🧪 **Unit tesztek** - pytest alapú tesztek
-9. 📏 **Data quality checks** - Automatikus adatminőség ellenőrzések
+**Technológiai stack:**
+- **Backend:** Python 3.12, SQLAlchemy, Pydantic
+- **Frontend:** Streamlit, Plotly
+- **Reporting:** ReportLab (PDF)
+- **DevOps:** Docker, GitHub Actions
 
 ---
-
-## 🛠️ Konfigurációs Lehetőségek
-
-A `.env` fájlban (vagy környezeti változókban) beállítható:
-
-```bash
-# Projekt alapok
-PROJECT_NAME=Production Report System
-LOG_LEVEL=INFO
-
-# Adatbázis (SQLite)
-DATABASE_URL=sqlite:///./data/production.db
-
-# API konfiguráció
-API_BASE_URL=https://api.example.com/v1
-
-# Fájl útvonalak (opcionális felülírás)
-# PLANNING_FILE=./data/planning.xlsx
-# LAB_DATA_FILE=./data/lab_data.xlsx
-# UTILITIES_FILE=./data/utilities.xlsx
-```
-
----
-
-## 📖 Kód Példák
-
-### **Adatbázis lekérdezések**
-
-```python
-from src.database import get_db
-from src.models import MachineDB
-
-# Összes gép lekérdezése
-with get_db() as db:
-    machines = db.query(MachineDB).all()
-    for machine in machines:
-        print(f"{machine.id}: {machine.name}")
-```
-
-### **Új adat beszúrása**
-
-```python
-from src.database import get_db
-from src.models import ArticleDB
-
-with get_db() as db:
-    new_article = ArticleDB(
-        id="ART004",
-        name="Special Liner",
-        product_group="Premium",
-        nominal_gsm=180.0
-    )
-    db.add(new_article)
-    # Az adatbázis automatikusan commit-olódik
-```
-
----
-
-## ⚠️ Megjegyzések és Limitációk
-
-### **Státusz: Működő Demo Projekt**
-- ✅ Struktúra és alapvető funkcionalitás kész
-- ✅ Excel adatok beolvasása és betöltése működik
-- ✅ Minta adatok generálása működik
-- ⚠️ Valós API integráció hiányzik (placeholder URL)
-- ⚠️ Nincs riport modul (`reports/` mappa üres)
-- ⚠️ Nincs transformation logika (`transformers/` mappa üres)
-- ⚠️ Csak demo adatokkal működik, valós adatforrásokat be kell kötni
-
-### **SQLite limitációk**
-- ⚠️ Egyidejű írás korlátozott
-- ⚠️ Nagy adatmennyiségnél lassú lehet
-- 💡 Production környezetben érdemes PostgreSQL/MySQL-re váltani
-
-### **Python verzió**
-- ✅ Python 3.9+ szükséges (Pydantic 2.x miatt)
-- ✅ Tesztelve: Python 3.13
-
----
-
-## 📞 Támogatás
-
-Ez egy **demo/template projekt**, ami kiváló kiindulási pont egy komplex reporting rendszerhez.
-
-**Következő lépések:**
-1. 🔗 **Valós adatforrások bekötése** (API credentials, Excel fájlok)
-2. 📊 **Üzleti logika implementálása** (transformers, calculations)
-3. 📈 **Vizualizáció hozzáadása** (Streamlit dashboard)
-4. 🚀 **Production deployment** (Docker, scheduler, monitoring)
-
----
-
-## 🎓 Tanulságok és Best Practices
-
-Ez a projekt demonstrálja:
-
-✅ **Layered Architecture** - Tiszta szeparáció (data, business, presentation)  
-✅ **Dependency Injection** - Config és database objektumok  
-✅ **Single Responsibility** - Minden modul egy feladatot lát el  
-✅ **Error Handling** - Minden kritikus ponton try-except  
-✅ **Logging Strategy** - File (debug) + Console (warnings)  
-✅ **Type Safety** - Pydantic validation + type hints  
-✅ **Context Managers** - Biztonságos resource kezelés  
-✅ **Demo Data Generation** - Automatikus minta adat létrehozás teszteléshez  
-
----
-
-**Készült:** 2026. január 22.  
-**Státusz:** ✅ Működő Demo Projekt (teljesen futtatható minta adatokkal)  
-**Következő feladatok:** Valós adatforrások integrálása, transformers logika, dashboard, riportok
+*Készült: Kremzner Gábor - 2026*
