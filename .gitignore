@@ -2,8 +2,9 @@ __pycache__/
 *.pyc
 .env
 .coverage
-*.db
-*.xlsx
+# Adatfájlok (Engedélyezve a Streamlit Cloud demóhoz)
+# *.db
+# *.xlsx
 logs/
 .pytest_cache/
 DEVELOPMENT_PLAN.md
