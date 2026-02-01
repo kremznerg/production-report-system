@@ -79,6 +79,16 @@ def apply_custom_css():
         font-size: 1.8rem !important;
     }
 
+    /* SIDEBAR INPUTS HIGHLIGHT */
+    section[data-testid="stSidebar"] [data-testid="stSelectbox"],
+    section[data-testid="stSidebar"] [data-testid="stDateInput"] {
+        background-color: #f1f3f5;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid #e9ecef;
+        margin-bottom: 5px;
+    }
+
     section[data-testid="stSidebar"] hr {
         margin-top: 10px !important;
         margin-bottom: 20px !important;

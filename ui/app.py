@@ -76,7 +76,11 @@ def render_sidebar():
         else:
             default_date = date.today() - timedelta(days=1)
             
-        selected_date = st.date_input("DÁTUM VÁLASZTÁS", value=default_date)
+        selected_date = st.date_input(
+            "DÁTUM VÁLASZTÁS", 
+            value=default_date,
+            help="Válaszd ki az elemzés napját"
+        )
             
         # Adat szinkronizáció (ETL indítása)
         if st.button("Adatok szinkronizálása", width="stretch"):
