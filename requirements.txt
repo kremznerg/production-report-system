@@ -4,9 +4,8 @@ sqlalchemy
 pydantic
 pydantic-settings
 python-dotenv
-requests
 openpyxl
 reportlab
 pytest
-fastapi
-uvicorn
+plotly
+watchdog
