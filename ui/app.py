@@ -24,7 +24,7 @@ from src.pipeline import Pipeline
 # --- PAGE CONFIG ---
 st.set_page_config(
     page_title="Operations Dashboard",
-    page_icon=None,
+    page_icon="assets/page_icon.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -232,7 +232,7 @@ with st.sidebar:
     selected_date = st.date_input("DÁTUM VÁLASZTÁS", value=max_date.date() if total_events > 0 else date.today() - timedelta(days=1))
         
     # 3. Szinkronizáció
-    if st.button("Adatok Szinkronizálása", width="stretch"):
+    if st.button("Adatok szinkronizálása", width="stretch"):
         with st.spinner(f"Adatok lekérése a kiválasztott napra ({selected_date})..."):
             try:
                 pipeline = Pipeline()
@@ -243,7 +243,7 @@ with st.sidebar:
                 st.error(f"Hiba történt: {str(e)}")
 
     st.markdown("---")
-    with st.expander("Rendszerstátusz"):
+    with st.expander("Elérhető adatok"):
         if total_events > 0:
             st.caption(f"**Elérhető időszak:**\n{min_date.strftime('%Y-%m-%d')} — {max_date.strftime('%Y-%m-%d')}")
             st.caption(f"**Események száma:** {total_events:,} db")
@@ -264,27 +264,34 @@ if not events:
 else:
     # --- 1. KPI SZEKCIÓ (FŐ MUTATÓK ÉS KÖZMŰVEK) ---
     if summary:
+        # KPI Szekció címe ikonnal
+        k1, k2 = st.columns([0.05, 0.95])
+        with k1:
+            st.image("assets/oee.png", width=64)
+        with k2:
+            st.subheader("Napi teljesítménymutatók")
+
         # Felső sor: Termelési KPI-ok
         col1, col2, col3, col4 = st.columns(4)
         
         # 1. Termelés
         prod_delta_pct = (summary.total_tons / summary.target_tons - 1) * 100 if summary.target_tons and summary.target_tons > 0 else 0
         with col1:
-            st.metric("Termelés", f"{summary.total_tons:.1f} t", 
+            st.metric("TERMELÉS", f"{summary.total_tons:.1f} t", 
                     delta=f"{prod_delta_pct:.1f} %" if summary.target_tons else None,
                     help=f"A gép által termelt összes papír súlya (nettó tonna).\n\n(Cél: {summary.target_tons:.1f} t)")
             st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), use_container_width=True, config={'displayModeBar': False})
         
         # 2. OEE
         with col2:
-            st.metric("OEE Állapot", f"{summary.oee_pct:.1f} %", 
+            st.metric("OEE ÁLLAPOT", f"{summary.oee_pct:.1f} %", 
                     help=f"Teljes Eszközhatékonyság (Overall Equipment Effectiveness).")
             st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), use_container_width=True, config={'displayModeBar': False})
         
         # 3. Sebesség Index
         speed_eff = (summary.avg_speed_m_min / summary.target_speed_m_min * 100) if summary.target_speed_m_min and summary.target_speed_m_min > 0 else 0
         with col3:
-            st.metric("Sebesség index", f"{speed_eff:.1f} %",
+            st.metric("SEBESSÉG INDEX", f"{speed_eff:.1f} %",
                     help=f"A gép sebességének hatékonysága a tervhez képest.")
             trend_speeds = [(s.avg_speed_m_min / s.target_speed_m_min * 100) if s.target_speed_m_min > 0 else 0 for s in trend_summaries]
             st.plotly_chart(render_sparkline(trend_speeds, "#9b59b6"), use_container_width=True, config={'displayModeBar': False})
@@ -292,29 +299,36 @@ else:
         # 4. Selejtarány
         scrap_rate = (summary.scrap_tons / summary.total_tons * 100) if summary.total_tons > 0 else 0
         with col4:
-            st.metric("Selejtarány", f"{scrap_rate:.1f} %", 
+            st.metric("SELEJTARÁNY", f"{scrap_rate:.1f} %", 
                     help=f"A nem megfelelő minőségű termelés aránya.")
             trend_scraps = [(s.scrap_tons / s.total_tons * 100) if s.total_tons > 0 else 0 for s in trend_summaries]
             st.plotly_chart(render_sparkline(trend_scraps, "#e74c3c"), use_container_width=True, config={'displayModeBar': False})
+
+        # Fajlagos mutatók címe ikonnal
+        u1, u2 = st.columns([0.05, 0.95])
+        with u1:
+            st.image("assets/power.png", width=64)
+        with u2:
+            st.subheader("Fajlagos erőforrás-felhasználás")
 
         # Második sor: Fajlagos mutatók (Utilities)
         u_col1, u_col2, u_col3, u_col4 = st.columns(4)
         
         # Abszolút értékek visszaszámolása a fajlagosból
         total_elec = summary.spec_electricity_kwh_t * summary.total_tons
-        u_col1.metric("Villamos energia", f"{summary.spec_electricity_kwh_t:.0f} kWh/t", 
+        u_col1.metric("VILLAMOS ENERGIA", f"{summary.spec_electricity_kwh_t:.0f} kWh/t", 
                   help=f"Átlagos elektromos energia fogyasztás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_elec:,.0f} kWh")
         
         total_water = summary.spec_water_m3_t * summary.total_tons
-        u_col2.metric("Vízfelhasználás", f"{summary.spec_water_m3_t:.1f} m³/t", 
+        u_col2.metric("VÍZFELHASZNÁLÁS", f"{summary.spec_water_m3_t:.1f} m³/t", 
                   help=f"Frissvíz felhasználás 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_water:,.0f} m³")
         
         total_steam = summary.spec_steam_t_t * summary.total_tons
-        u_col3.metric("Gőzfelhasználás", f"{summary.spec_steam_t_t:.2f} t/t", 
+        u_col3.metric("GŐZFELHASZNÁLÁS", f"{summary.spec_steam_t_t:.2f} t/t", 
                   help=f"Gőzfelhasználás a szárításhoz 1 tonna termékre vetítve.\n\nÖsszes fogyasztás: {total_steam:.1f} t")
         
         total_fiber = summary.spec_fiber_t_t * summary.total_tons
-        u_col4.metric("Fajlagos rost", f"{summary.spec_fiber_t_t:.2f} t/t", 
+        u_col4.metric("ALAPANYAG", f"{summary.spec_fiber_t_t:.2f} t/t", 
                   help=f"Felhasznált papírrost mennyisége 1 tonna késztermékre.\n\nÖsszes felhasználás: {total_fiber:.1f} t")
     else:
         st.info("A napi összesítés még nincs kiszámolva.")
@@ -322,7 +336,11 @@ else:
         st.metric("Termelés (Nyers adat)", f"{total_production:.1f} t")
     
     st.divider()
-    st.markdown("### Termelési események")
+    c1, c2 = st.columns([0.05, 0.95])
+    with c1:
+        st.image("assets/events.png", width=64)
+    with c2:
+        st.subheader("Termelési események")
 
     # --- IDŐVONAL ÉS GÉPÁLLAPOT ELOSZLÁS ---
     t_col1, t_col2 = st.columns([2, 1])
@@ -357,7 +375,7 @@ else:
         if not df_events.empty:
             df_events["Időtartam_perc"] = (df_events["Vége"] - df_events["Kezdet"]).dt.total_seconds() / 60
         
-        st.markdown("**Napi Termelési Idővonal**")
+        st.markdown("**Napi termelési idővonal**")
         fig_timeline = px.timeline(
             df_events, 
             x_start="Kezdet", 
@@ -397,7 +415,7 @@ else:
         st.plotly_chart(fig_timeline, use_container_width=True)
 
     with t_col2:
-        st.markdown("**Gépállapot Eloszlás (időben)**")
+        st.markdown("**Gépállapot eloszlás (időben)**")
         df_states = df_events.groupby("Állapot")["Időtartam_perc"].sum().reset_index(name="Perc")
         fig_pie_status = px.pie(
             df_states, values="Perc", names="Állapot", 
@@ -420,7 +438,11 @@ else:
     st.divider()
 
     # 2. TERMÉK STATISZTIKA
-    st.markdown("### Termékstatisztika")
+    s1, s2 = st.columns([0.05, 0.95])
+    with s1:
+        st.image("assets/layer.png", width=64)
+    with s2:
+        st.subheader("Termékstatisztika")
     df_prod = pd.DataFrame([
         {
             "Termék": e.article_id if e.article_id else "Ismeretlen",
@@ -444,7 +466,7 @@ else:
             fig_mix = px.bar(
                 article_mix, x="Termék", y="Tonna", 
                 text_auto='.1f',
-                title="Mennyiség Termékenként (Tonna)",
+                title="Mennyiség termékenként (tonna)",
                 color="Termék",
                 template=PLOTLY_THEME,
                 color_discrete_sequence=COLOR_PALETTE
@@ -461,7 +483,7 @@ else:
             fig_time_mix = px.pie(
                 article_mix, values="Időtartam (perc)", names="Termék",
                 hole=0.4,
-                title="Futásidő Megoszlás",
+                title="Futásidő megoszlás",
                 template=PLOTLY_THEME,
                 color_discrete_sequence=COLOR_PALETTE
             )
@@ -479,7 +501,11 @@ else:
     st.divider()
 
     # --- 4. MINŐSÉGI TRENDEK (TRENDS) ---
-    st.markdown("### Minőségi analitika")
+    q1, q2 = st.columns([0.05, 0.95])
+    with q1:
+        st.image("assets/flask.png", width=64)
+    with q2:
+        st.subheader("Minőségi analitika")
     if quality:
         df_q = pd.DataFrame([
             {
@@ -542,19 +568,23 @@ else:
     st.divider()
 
     # --- 5. LEÁLLÁS ANALÍZIS (DOWNTIME) ---
-    st.markdown("### Termelési zavarok")
+    a1, a2 = st.columns([0.05, 0.95])
+    with a1:
+        st.image("assets/alert.png", width=64)
+    with a2:
+        st.subheader("Termelési zavarok")
     if summary:
         d_col1, d_col2 = st.columns([1, 2])
         with d_col1:
-            st.metric("Összes Állásidő", f"{summary.total_downtime_min:.0f} perc")
-            st.metric("Szakadásszám", f"{summary.break_count} db")
+            st.metric("ÖSSZES ÁLLÁSIDŐ", f"{summary.total_downtime_min:.0f} perc")
+            st.metric("SZAKADÁSSZÁM", f"{summary.break_count} db")
         
         with d_col2:
             pareto_df = get_pareto_data(selected_machine_id)
             if not pareto_df.empty:
                 fig_pareto = px.bar(
                     pareto_df, x="Ok", y="Időtartam (perc)", 
-                    title="Leggyakoribb Leállási Okok (30 nap)", 
+                    title="Leggyakoribb leállási okok (30 nap)", 
                     color="Ok", template=PLOTLY_THEME, height=300
                 )
                 fig_pareto.update_layout(showlegend=False, margin=dict(t=40, b=0, l=0, r=0))
