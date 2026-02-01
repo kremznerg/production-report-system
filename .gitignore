@@ -7,6 +7,4 @@ __pycache__/
 # *.xlsx
 logs/
 .pytest_cache/
-DEVELOPMENT_PLAN.md
-
 .DS_Store

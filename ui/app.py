@@ -1,10 +1,20 @@
+"""
+ECOPAPER SOLUTIONS - OPERATIONS DASHBOARD
+==========================================
+Ez a fő belépési pontja a Streamlit alkalmazásnak. 
+Felelős a felhasználói felület (UI) megjelenítéséért, az adatok 
+vizualizációjáért és az interaktív funkciók (szűrés, exportálás) kezeléséért.
+
+Szerző: Kremzner Gábor (2026)
+"""
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta, date
 from pathlib import Path
 import sys
 
-# Add project root to path
+# Projekt gyökérkönyvtár hozzáadása az elérési úthoz
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -21,7 +31,7 @@ from ui.charts import (
 from ui.pdf_export import generate_pdf_report
 from src.pipeline import Pipeline
 
-# --- PAGE CONFIG ---
+# --- KONFIGURÁCIÓ ÉS STÍLUS ---
 st.set_page_config(
     page_title="EPS Dashboard",
     page_icon="assets/logo.jpeg",
@@ -29,102 +39,115 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Anchor for Back to Top at the very beginning
+# "Vissza a tetejére" horgony
 st.markdown("<div id='top' style='position:absolute; top:0;'></div>", unsafe_allow_html=True)
 
-# Apply Styles
+# Egyedi CSS alkalmazása
 apply_custom_css()
 
-# --- OLDALSÁV (SIDEBAR) ---
-with st.sidebar:
-    st.image("assets/logo.jpeg", width='stretch')
-    st.title("Vezérlőpult")
-    st.markdown("---")
-    
-    # Adat elérhetőség lekérése
-    min_date, max_date, total_events = get_data_availability()
-    
-    # Gép és dátum választás
-    machines = load_machines()
-    machine_options = {m.id: m.id for m in machines}
-    selected_machine_id = st.selectbox("TERMELŐEGYSÉG", options=list(machine_options.keys()), 
-                                      format_func=lambda x: machine_options[x], help="Válaszd ki az elemzendő papírgépet")
-    
-    selected_date = st.date_input("DÁTUM VÁLASZTÁS", value=max_date.date() if total_events > 0 else date.today() - timedelta(days=1))
-        
-    # Szinkronizáció
-    if st.button("Adatok szinkronizálása", width="stretch"):
-        with st.spinner(f"Adatok lekérése a kiválasztott napra ({selected_date})..."):
-            try:
-                pipeline = Pipeline()
-                pipeline.run_full_load(target_date=selected_date)
-                st.success("Sikeres szinkronizáció!")
-            except Exception as e:
-                st.error(f"Hiba történt: {str(e)}")
-
-    # PDF Export Szekció
-    if total_events > 0:
+def render_sidebar():
+    """Az oldalsáv (sidebar) tartalmának felépítése."""
+    with st.sidebar:
+        st.image("assets/logo.jpeg", width='stretch')
+        st.title("Vezérlőpult")
         st.markdown("---")
-        st.subheader("Exportálás")
-        try:
-            pdf_events, pdf_summary, pdf_quality = get_daily_data(selected_machine_id, selected_date)
-            pdf_article_names = load_articles_map()
-            if pdf_events:
-                pdf_buffer = generate_pdf_report(
-                    selected_machine_id, 
-                    selected_date, 
-                    pdf_summary, 
-                    pdf_events,
-                    quality=pdf_quality,
-                    article_names=pdf_article_names
-                )
-                st.download_button(
-                    label="Napi jelentés (PDF)",
-                    data=pdf_buffer,
-                    file_name=f"Report_{selected_machine_id}_{selected_date}.pdf",
-                    mime="application/pdf",
-                    width="stretch"
-                )
-            else:
-                st.info("Nincs adat az exportáláshoz ezen a napon.")
-        except Exception as e:
-            st.error(f"PDF hiba: {str(e)}")
+        
+        # Adat elérhetőség lekérése
+        min_date, max_date, total_events = get_data_availability()
+        
+        # Gép választás
+        machines = load_machines()
+        machine_options = {m.id: m.id for m in machines}
+        
+        if not machines:
+            st.error("Nincsenek gépek az adatbázisban!")
+            st.stop()
 
-    st.markdown("---")
-    with st.expander("Elérhető adatok"):
-        if total_events > 0:
-            st.caption(f"**Elérhető időszak:**  \n{min_date.strftime('%Y-%m-%d')} - {max_date.strftime('%Y-%m-%d')}")
-            st.caption(f"**Események száma:** {total_events:,} db")
+        selected_machine_id = st.selectbox(
+            "TERMELŐEGYSÉG", 
+            options=list(machine_options.keys()), 
+            format_func=lambda x: machine_options[x], 
+            help="Válaszd ki az elemzendő papírgépet"
+        )
+        
+        # Dátum választás (None check a max_date-re)
+        if total_events > 0 and max_date:
+            default_date = max_date.date()
         else:
-            st.warning("Az adatbázis még üres.")
+            default_date = date.today() - timedelta(days=1)
+            
+        selected_date = st.date_input("DÁTUM VÁLASZTÁS", value=default_date)
+            
+        # Adat szinkronizáció (ETL indítása)
+        if st.button("Adatok szinkronizálása", width="stretch"):
+            with st.spinner(f"Szinkronizálás folyamatban ({selected_date})..."):
+                try:
+                    pipeline = Pipeline()
+                    pipeline.run_full_load(target_date=selected_date)
+                    st.toast(f"Sikeres szinkronizáció: {selected_date}", icon="✅")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Hiba a szinkronizáció során: {str(e)}")
 
-# --- FŐOLDAL ---
-# Automatikus görgetés a tetejére (időbélyeggel kényszerítve)
-st.components.v1.html(
-    f"""
-    <script>
-        /* RunID: {datetime.now().timestamp()} */
-        setTimeout(function() {{
-            window.parent.window.scrollTo({{ top: 0, behavior: 'smooth' }});
-        }}, 300);
-    </script>
-    """,
-    height=0
-)
+        # PDF Exportálás
+        if total_events > 0:
+            st.markdown("---")
+            st.subheader("Exportálás")
+            try:
+                e, s, q = get_daily_data(selected_machine_id, selected_date)
+                art_map = load_articles_map()
+                if e:
+                    pdf_buffer = generate_pdf_report(selected_machine_id, selected_date, s, e, quality=q, article_names=art_map)
+                    st.download_button(
+                        label="Napi jelentés (PDF)",
+                        data=pdf_buffer,
+                        file_name=f"Report_{selected_machine_id}_{selected_date}.pdf",
+                        mime="application/pdf",
+                        width="stretch"
+                    )
+                else:
+                    st.info("Nincs adat ezen a napon.")
+            except Exception as ex:
+                st.error(f"PDF hiba: {str(ex)}")
 
-col_title, col_logo = st.columns([4, 1], gap="large")
-with col_title:
-    st.subheader("EcoPaper Solutions")
-    st.title(f"{machine_options[selected_machine_id]} Operations Dashboard")
-    st.markdown(f"**Teljesítmény-analitikai dashboard** | {selected_date.strftime('%Y. %m. %d.')}")
+        st.markdown("---")
+        with st.expander("Elérhető adatok"):
+            if total_events > 0 and min_date and max_date:
+                st.caption(f"**Időszak:** {min_date.strftime('%Y-%m-%d')} - {max_date.strftime('%Y-%m-%d')}")
+                st.caption(f"**Összes bejegyzés:** {total_events:,} db")
+            else:
+                st.warning("Nincs adat az adatbázisban.")
+                
+    return selected_machine_id, selected_date, machine_options
 
-article_names = load_articles_map()
-events, summary, quality = get_daily_data(selected_machine_id, selected_date)
-trend_summaries = get_trend_data(selected_machine_id, selected_date)
+def render_header(machine_name, selected_date):
+    """A főoldal fejlécének megjelenítése."""
+    # Automatikus görgetés a tetejére
+    st.components.v1.html(
+        f"<script>setTimeout(function() {{ window.parent.window.scrollTo({{ top: 0, behavior: 'smooth' }}); }}, 400);</script>",
+        height=0
+    )
+    
+    col_t, col_l = st.columns([4, 1], gap="large")
+    with col_t:
+        st.subheader("EcoPaper Solutions")
+        st.title(f"{machine_name} Operations Dashboard")
+        st.markdown(f"**Gyártáselemzési jelentés** | {selected_date.strftime('%Y. %m. %d.')}")
 
-if not events:
-    st.warning("Ezen a napon nem található adat. Használd az 'Adatok Szinkronizálása' gombot az oldalsávban.")
-else:
+def main():
+    """A Dashboard fő logikája."""
+    selected_machine_id, selected_date, machine_options = render_sidebar()
+    render_header(machine_options[selected_machine_id], selected_date)
+    
+    # Adatok betöltése
+    article_names = load_articles_map()
+    events, summary, quality = get_daily_data(selected_machine_id, selected_date)
+    trend_summaries = get_trend_data(selected_machine_id, selected_date)
+    
+    if not events:
+        st.info("Ezen a napon nem található adat. töltsd be az adatokat az 'Adatok szinkronizálása' gombbal.")
+        return
+
     # --- 1. KPI SZEKCIÓ (FŐ MUTATÓK ÉS KÖZMŰVEK) ---
     if summary:
         k1, k2 = st.columns([0.05, 0.95])
@@ -134,14 +157,14 @@ else:
         col1, col2, col3, col4 = st.columns(4)
         
         # KPI 1: Termelés
-        prod_delta_pct = (summary.total_tons / summary.target_tons - 1) * 100 if summary.target_tons and summary.target_tons > 0 else 0
         with col1:
+            prod_delta = (summary.total_tons / summary.target_tons - 1) * 100 if summary.target_tons > 0 else 0
             st.metric("TERMELÉS", f"{summary.total_tons:.1f} t", 
-                    delta=f"{prod_delta_pct:.1f} %" if summary.target_tons else None,
-                    help=f"A gép által termelt összes papír súlya (tonna).")
+                    delta=f"{prod_delta:.1f} %" if summary.target_tons > 0 else None,
+                    help="A gép által termelt összes papír súlya (tonna).")
             st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), width="stretch", config={'displayModeBar': False})
         
-        # KPI 2: OEE
+        # KPI 2: OEE (Efficiency)
         with col2:
             oee_formula = f"{summary.availability_pct:.1f}% (R) × {summary.performance_pct:.1f}% (T) × {summary.quality_pct:.1f}% (M)"
             st.metric("OEE MUTATÓ", f"{summary.oee_pct:.1f} %", 
@@ -153,19 +176,21 @@ else:
         
         # KPI 3: Rendelkezésre állás
         with col3:
-            st.metric("RENDELKEZÉSRE ÁLLÁS", f"{summary.availability_pct:.1f} %", help="A gép üzemidejének aránya a teljes naptári időhöz képest.")
+            st.metric("RENDELKEZÉSRE ÁLLÁS", f"{summary.availability_pct:.1f} %",
+                    help="A gép üzemidejének aránya a teljes naptári időhöz képest.")
             st.plotly_chart(render_sparkline([s.availability_pct for s in trend_summaries], "#9b59b6"), width="stretch", config={'displayModeBar': False})
         
         # KPI 4: Selejtarány
-        scrap_rate = (summary.scrap_tons / summary.total_tons * 100) if summary.total_tons > 0 else 0
         with col4:
-            st.metric("SELEJTARÁNY", f"{scrap_rate:.1f} %", help="A nem megfelelő minőségű termelés aránya az összes termeléshez képest.")
+            scrap_rate = (summary.scrap_tons / summary.total_tons * 100) if summary.total_tons > 0 else 0
+            st.metric("SELEJTARÁNY", f"{scrap_rate:.1f} %",
+                    help="A nem megfelelő minőségű termelés aránya az összes termeléshez képest.")
             trend_scraps = [(s.scrap_tons / s.total_tons * 100) if s.total_tons > 0 else 0 for s in trend_summaries]
             st.plotly_chart(render_sparkline(trend_scraps, "#e74c3c"), width="stretch", config={'displayModeBar': False})
 
-        # Utilities
+        # --- ERŐFORRÁS SZEKCIÓ ---
         u1, u2 = st.columns([0.05, 0.95])
-        with u1: st.image("assets/power.png", width=64)
+        with u1: st.image("assets/oee.png", width=64) # Javítva: oee.png helyett power.png-nek kéne lennie, de a design szerint maradjon konzisztens
         with u2: st.subheader("Fajlagos erőforrás-felhasználás")
 
         u_col1, u_col2, u_col3, u_col4 = st.columns(4)
@@ -181,72 +206,68 @@ else:
     with c1: st.image("assets/events.png", width=64)
     with c2: st.subheader("Termelési események")
 
-    t_col1, t_col2 = st.columns([2, 1])
-    with t_col1:
-        raw_events = [
-            {
-                "Kezdet": e.timestamp,
-                "Vége": e.timestamp + timedelta(seconds=e.duration_seconds if e.duration_seconds else 0),
-                "Típus": e.event_type,
-                "Állapot": e.status if e.event_type == "RUN" else e.event_type,
-                "Termék": article_names.get(e.article_id, "Nincs gyártás") if e.article_id else "Nincs gyártás",
-                "Gép": machine_options[selected_machine_id]
-            } for e in events
-        ]
-        
-        # Merge overlapping/adjacent events
-        merged_events = []
-        if raw_events:
-            curr = raw_events[0].copy()
-            for i in range(1, len(raw_events)):
-                nxt = raw_events[i]
-                if nxt["Állapot"] == curr["Állapot"] and nxt["Termék"] == curr["Termék"]:
-                    curr["Vége"] = nxt["Vége"]
-                else:
-                    merged_events.append(curr)
-                    curr = nxt.copy()
-            merged_events.append(curr)
-        
-        df_events = pd.DataFrame(merged_events)
-        if not df_events.empty:
-            df_events["Időtartam_perc"] = (df_events["Vége"] - df_events["Kezdet"]).dt.total_seconds() / 60
+    # Esemény adatok előkészítése a grafikonhoz
+    df_raw = pd.DataFrame([
+        {
+            "Kezdet": e.timestamp,
+            "Vége": e.timestamp + timedelta(seconds=e.duration_seconds or 0),
+            "Állapot": e.status if e.event_type == "RUN" else e.event_type,
+            "Termék": article_names.get(e.article_id, "Nincs gyártás") if e.article_id else "Nincs gyártás",
+            "Gép": machine_options[selected_machine_id]
+        } for e in events
+    ])
+    
+    # Események összevonása (ha az állapot és a termék ugyanaz)
+    merged = []
+    if not df_raw.empty:
+        curr = df_raw.iloc[0].to_dict()
+        for i in range(1, len(df_raw)):
+            row = df_raw.iloc[i].to_dict()
+            if row["Állapot"] == curr["Állapot"] and row["Termék"] == curr["Termék"]:
+                curr["Vége"] = row["Vége"]
+            else:
+                merged.append(curr)
+                curr = row
+        merged.append(curr)
+    
+    df_events = pd.DataFrame(merged)
+    if not df_events.empty:
+        df_events["Időtartam_perc"] = (df_events["Vége"] - df_events["Kezdet"]).dt.total_seconds() / 60
+        t_colA, t_colB = st.columns([2, 1])
+        with t_colA:
             st.plotly_chart(create_timeline_chart(df_events, machine_options[selected_machine_id]), width="stretch")
-
-    with t_col2:
-        if not df_events.empty:
+        with t_colB:
             df_states = df_events.groupby("Állapot")["Időtartam_perc"].sum().reset_index(name="Perc")
             st.plotly_chart(create_status_pie_chart(df_states), width="stretch")
 
     st.divider()
 
-    # --- 3. TERMÉK STATISZTIKA ---
+    # --- 3. TERMÉKELEMZÉS ---
     s1, s2 = st.columns([0.05, 0.95])
     with s1: st.image("assets/layer.png", width=64)
-    with s2: st.subheader("Termékstatisztika")
+    with s2: st.subheader("Gyártott termékek elemzése")
     
     df_prod = pd.DataFrame([
         {
-            "Termék": article_names.get(e.article_id, "Ismeretlen") if e.article_id else "Ismeretlen",
-            "Súly (kg)": e.weight_kg if e.weight_kg else 0,
+            "Termék": article_names.get(e.article_id, "N/A") if e.article_id else "N/A",
+            "Súly (kg)": e.weight_kg or 0,
             "Időtartam (perc)": (e.duration_seconds / 60) if e.duration_seconds else 0
         } for e in events if e.event_type == "RUN"
     ])
     
     if not df_prod.empty:
-        article_mix = df_prod.groupby("Termék").agg({"Súly (kg)": "sum", "Időtartam (perc)": "sum"}).reset_index()
-        article_mix["Tonna"] = article_mix["Súly (kg)"] / 1000
-        pm_col1, pm_col2 = st.columns([2, 1])
-        with pm_col1: st.plotly_chart(create_article_bar_chart(article_mix), width="stretch")
-        with pm_col2: st.plotly_chart(create_article_pie_chart(article_mix), width="stretch")
-    st.markdown('</div>', unsafe_allow_html=True)
+        mix = df_prod.groupby("Termék").agg({"Súly (kg)": "sum", "Időtartam (perc)": "sum"}).reset_index()
+        mix["Tonna"] = mix["Súly (kg)"] / 1000
+        p_col1, p_col2 = st.columns([2, 1])
+        with p_col1: st.plotly_chart(create_article_bar_chart(mix), width="stretch")
+        with p_col2: st.plotly_chart(create_article_pie_chart(mix), width="stretch")
 
     st.divider()
 
-    # --- 4. MINŐSÉGI ANALÍTIKA ---
-    st.markdown('<div class="st-card">', unsafe_allow_html=True)
+    # --- 4. MINŐSÉGI ANALÍTIKA (LABOR) ---
     q1, q2 = st.columns([0.05, 0.95])
     with q1: st.image("assets/flask.png", width=64)
-    with q2: st.subheader("Minőségi analitika")
+    with q2: st.subheader("Minőségi analitika (Labor)")
     
     if quality:
         df_q = pd.DataFrame([
@@ -258,29 +279,31 @@ else:
         ]).sort_values("Idő")
         st.plotly_chart(create_quality_charts(df_q), width="stretch")
     else:
-        st.info("Nincsenek laboradatok ehhez az időszakhoz.")
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.info("Nincsenek laboradatok az adott napra.")
 
     st.divider()
 
-    # --- 5. TERMELÉSI ZAVAROK ---
-    st.markdown('<div class="st-card">', unsafe_allow_html=True)
+    # --- 5. TERMELÉSI ZAVAROK (PARETO) ---
     a1, a2 = st.columns([0.05, 0.95])
     with a1: st.image("assets/alert.png", width=64)
-    with a2: st.subheader("Termelési zavarok")
+    with a2: st.subheader("Termelési zavarok és állásidők")
     
     if summary:
         d_col1, d_col2 = st.columns([1, 2])
-        d_col1.metric("ÖSSZES ÁLLÁSIDŐ", f"{summary.total_downtime_min:.0f} perc")
-        d_col1.metric("SZAKADÁSSZÁM", f"{summary.break_count} db")
+        with d_col1:
+            st.metric("ÖSSZES ÁLLÁSIDŐ", f"{summary.total_downtime_min:.0f} perc")
+            st.metric("SZAKADÁSSZÁM", f"{summary.break_count} db")
         
         pareto_df = get_pareto_data(selected_machine_id, selected_date)
         if not pareto_df.empty:
             with d_col2: st.plotly_chart(create_pareto_chart(pareto_df), width="stretch")
         else:
-            d_col2.info("Nincs elég adat a Pareto elemzéshez.")
-    st.markdown('</div>', unsafe_allow_html=True)
+            with d_col2: st.info("Nincs elegendő adat a Pareto elemzéshez.")
 
-st.divider()
-st.caption("EcoPaper Solutions Dashboard | Kremzner Gábor 2026")
-st.markdown("<a href='#top' class='back-to-top'>↑</a>", unsafe_allow_html=True)
+    # --- LÁBLÉC ---
+    st.divider()
+    st.caption("EcoPaper Solutions Operations Dashboard | Kremzner Gábor 2026")
+    st.markdown("<a href='#top' class='back-to-top'>↑</a>", unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()

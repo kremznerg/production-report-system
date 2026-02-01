@@ -1,13 +1,27 @@
+"""
+VIZUALIZÁCIÓS MODUL (CHARTS)
+============================
+Ez a modul felelős a Plotly alapú interaktív grafikonok létrehozásáért. 
+Tartalmazza a trendvonalakat, idővonalakat, kördiagramokat és a minőségi 
+analitikai grafikonokat is.
+"""
+
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-# Plotly Theme
+# --- GLOBÁLIS STÍLUS BEÁLLÍTÁSOK ---
 PLOTLY_THEME = "plotly_white"
 COLOR_PALETTE = ["#0d6efd", "#6610f2", "#6f42c1", "#d63384", "#dc3545", "#fd7e14", "#ffc107", "#198754", "#20c997", "#0dcaf0"]
 
 def render_sparkline(values, color="#0d6efd"):
-    """Létrehoz egy apró trendvonalat (sparkline)."""
+    """
+    Létrehoz egy apró, minimalista trendvonalat (sparkline) a KPI kártyákhoz.
+    
+    Args:
+        values: A megjelenítendő értékek listája.
+        color: A vonal színe (hex kód).
+    """
     if not values or len(values) < 2:
         return None
         
@@ -25,7 +39,10 @@ def render_sparkline(values, color="#0d6efd"):
     return fig
 
 def create_timeline_chart(df_events, machine_name: str):
-    """Létrehozza a napi termelési idővonal grafikonját."""
+    """
+    Interaktív Gantt-diagram (idővonal) a termelési eseményekhez.
+    Megjeleníti a gép állapotát (RUN, STOP, BREAK) az idő függvényében.
+    """
     fig = px.timeline(
         df_events, 
         x_start="Kezdet", 
@@ -40,11 +57,12 @@ def create_timeline_chart(df_events, machine_name: str):
             "Gép": False,
             "Termék": False
         },
+        # Fix színkódok a gépállapotokhoz
         color_discrete_map={
-            "GOOD": "#2ecc71", 
-            "SCRAP": "#e67e22", 
-            "STOP": "#e74c3c", 
-            "BREAK": "#f1c40f"
+            "GOOD": "#2ecc71",  # Zöld: Jó termelés
+            "SCRAP": "#e67e22", # Narancs: Selejt
+            "STOP": "#e74c3c",  # Piros: Állás
+            "BREAK": "#f1c40f"  # Sárga: Szakadás
         },
         category_orders={"Állapot": ["GOOD", "SCRAP", "STOP", "BREAK"]},
         height=200 
@@ -65,7 +83,7 @@ def create_timeline_chart(df_events, machine_name: str):
     return fig
 
 def create_status_pie_chart(df_states):
-    """Létrehozza a gépállapot eloszlás kördiagramját."""
+    """Központi kördiagram a gép állapotainak százalékos megoszlásáról."""
     fig = px.pie(
         df_states, values="Perc", names="Állapot", 
         hole=0.6, 
@@ -84,7 +102,7 @@ def create_status_pie_chart(df_states):
     return fig
 
 def create_article_bar_chart(article_mix):
-    """Létrehozza a termékmennyiség oszlopdiagramját."""
+    """Vízszintes oszlopdiagram a gyártott termékek mennyiségéről (tonna)."""
     fig = px.bar(
         article_mix, x="Tonna", y="Termék", 
         orientation="h",
@@ -106,7 +124,7 @@ def create_article_bar_chart(article_mix):
     return fig
 
 def create_article_pie_chart(article_mix):
-    """Létrehozza a termék futásidő eloszlás kördiagramját."""
+    """Kördiagram a gyártási idő termékek szerinti megoszlásáról."""
     fig = px.pie(
         article_mix, values="Időtartam (perc)", names="Termék",
         hole=0.6,
@@ -125,7 +143,7 @@ def create_article_pie_chart(article_mix):
     return fig
 
 def create_quality_charts(df_q):
-    """Létrehozza a minőségi trendek összetett grafikonját."""
+    """Összetett (3 szintes) grafikon a fő minőségi paraméterek trendjeihez."""
     fig_q = make_subplots(
         rows=3, cols=1, 
         shared_xaxes=True,
@@ -133,7 +151,7 @@ def create_quality_charts(df_q):
         subplot_titles=("Grammsúly (GSM)", "Szakítószilárdság (kNm)", "Nedvesség %")
     )
     
-    # 1. GSM
+    # 1. GSM Trend
     fig_q.add_trace(go.Scatter(
         x=df_q["Idő"], y=df_q["Súly (GSM)"], 
         name="GSM", mode="lines+markers",
@@ -142,7 +160,7 @@ def create_quality_charts(df_q):
         hovertemplate="<b>Idő: %{x}</b><br>GSM: %{y:.1f}<br>Termék: %{customdata}<extra></extra>"
     ), row=1, col=1)
     
-    # 2. Szilárdság
+    # 2. Szilárdság Trend
     fig_q.add_trace(go.Scatter(
         x=df_q["Idő"], y=df_q["Szilárdság"], 
         name="Szilárdság", mode="lines+markers",
@@ -151,7 +169,7 @@ def create_quality_charts(df_q):
         hovertemplate="<b>Idő: %{x}</b><br>Knm: %{y:.1f}<br>Termék: %{customdata}<extra></extra>"
     ), row=2, col=1)
     
-    # 3. Nedvesség
+    # 3. Nedvesség Trend
     fig_q.add_trace(go.Scatter(
         x=df_q["Idő"], y=df_q["Nedvesség %"], 
         name="Nedvesség", mode="lines+markers",
@@ -172,7 +190,7 @@ def create_quality_charts(df_q):
     return fig_q
 
 def create_pareto_chart(pareto_df):
-    """Létrehozza a leállási okok Pareto diagramját."""
+    """Pareto diagram a leállási okok elemzéséhez és vizualizálásához."""
     fig = px.bar(
         pareto_df, x="Ok", y="Időtartam (perc)", 
         title="Leggyakoribb leállási okok (30 nap)", 

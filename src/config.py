@@ -1,36 +1,45 @@
+"""
+KONFIGURÁCIÓS MODUL (SETTINGS)
+==============================
+Ez a modul felelős az alkalmazás globális beállításainak kezeléséért.
+A Pydantic BaseSettings osztályát használjuk, amely lehetővé teszi a 
+beállítások automatikus beolvasását .env fájlból vagy környezeti változókból.
+"""
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 import os
 
 class Settings(BaseSettings):
     """
-    Alkalmazás szintű beállítások. 
-    A Pydantic automatikusan beolvassa a .env fájlt, ha létezik.
+    Központi beállítások osztálya.
+    Típuskényszerítést és alapértelmezett értékeket biztosít a projekt számára.
     """
     
-    # --- PROJEKT ALAPOK ---
-    PROJECT_NAME: str = "EcoPaper Solutions Operations"
-    LOG_LEVEL: str = "INFO"
+    # --- PROJEKT INFORMÁCIÓK ---
+    PROJECT_NAME: str = "EcoPaper Solutions Operations Dashboard"
+    LOG_LEVEL: str = "INFO" # Naplózási szint (DEBUG, INFO, WARNING, ERROR)
 
-    # --- ÚTVONALAK ---
+    # --- KÖNYVTÁRSTRUKTÚRA ---
+    # A projekt gyökérkönyvtárának meghatározása a fájl helye alapján
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     DATA_DIR: Path = BASE_DIR / "data"
     
-    # --- ADATBÁZIS ---
+    # --- ADATBÁZIS ELÉRÉS ---
+    # SQLite adatfájl helye
     DATABASE_URL: str = f"sqlite:///{DATA_DIR}/production.db"
 
-    # --- ADATFORRÁSOK (API & EXCEL) ---
-    API_BASE_URL: str = "http://localhost:8000/api"
-    
+    # --- KÜLSŐ FORRÁSOK (EXCEL) ---
     PLANNING_FILE: Path = DATA_DIR / "planning.xlsx"
     LAB_DATA_FILE: Path = DATA_DIR / "lab_data.xlsx"
     UTILITIES_FILE: Path = DATA_DIR / "utilities.xlsx"
 
-    # Pydantic konfiguráció
+    # Pydantic-specifikus konfiguráció
     model_config = SettingsConfigDict(
-        env_file=".env", 
-        env_file_encoding="utf-8",
-        extra="ignore" 
+        env_file=".env",              # .env fájl keresése
+        env_file_encoding="utf-8",    # Karakterkódolás
+        extra="ignore"                # Felesleges környezeti változók figyelmen kívül hagyása
     )
 
+# Globálisan elérhető settings példány
 settings = Settings()

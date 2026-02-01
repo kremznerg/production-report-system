@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Seed master data (machines and articles) into the database.
-Run this once after initializing the database.
+TÖRZSDATOK BETÖLTÉSE
+====================
+Feltölti az adatbázist az alapvető törzsadatokkal (gépek és termékek/cikkek).
+Ezt az adatbázis inicializálása után egyszer kell lefuttatni.
 """
 
 import sys
 from pathlib import Path
 
-# Add project root to Python path
+# Projekt gyökérkönyvtár hozzáadása a Python elérési úthoz
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -15,66 +17,46 @@ from src.database import get_db
 from src.models import MachineDB, ArticleDB
 
 def seed_master_data():
-    """Populate machines and articles tables with demo data."""
+    """Gépek és termékek (cikkek) feltöltése demo adatokkal."""
+    
+    print("\n📦 EcoPaper Solutions - Törzsdatok Betöltése")
+    print("-" * 40)
     
     with get_db() as db:
-        # Machines
+        # 1. Gépek (Paper Machines)
         machines = [
-            MachineDB(id="PM1", name="Paper Machine 1", location="Plant A"),
-            MachineDB(id="PM2", name="Paper Machine 2", location="Plant B"),
+            MachineDB(id="PM1", name="Paper Machine 1", location="Budapest Plant"),
+            MachineDB(id="PM2", name="Paper Machine 2", location="Budapest Plant"),
         ]
         
-        # Articles - industry-standard containerboard types
+        # 2. Termékek (Papíripari standard cikkszámok és grammsúlyok)
         articles = [
-            # Kraftliner - virgin kraft pulp, high strength
-            ArticleDB(
-                id="KL_150",
-                name="Kraftliner",
-                product_group="Liner",
-                nominal_gsm=150.0
-            ),
-            ArticleDB(
-                id="KL_175",
-                name="Kraftliner",
-                product_group="Liner",
-                nominal_gsm=175.0
-            ),
-            # Testliner - 100% recycled fibers
-            ArticleDB(
-                id="TL_100",
-                name="Testliner",
-                product_group="Liner",
-                nominal_gsm=100.0
-            ),
-            ArticleDB(
-                id="TL_140",
-                name="Testliner",
-                product_group="Liner",
-                nominal_gsm=140.0
-            ),
-            # White-Top Liner - bleached top layer for printing
-            ArticleDB(
-                id="WTL_120",
-                name="White-Top Liner",
-                product_group="Liner",
-                nominal_gsm=120.0
-            ),
-            # Fluting (Corrugating Medium) - wavy inner layer
-            ArticleDB(
-                id="FL_90",
-                name="Fluting",
-                product_group="Medium",
-                nominal_gsm=90.0
-            ),
+            # Kraftliner (Szűz rostból készült, nagy szilárdságú fedőréteg)
+            ArticleDB(id="KL_150", name="Kraftliner", product_group="Liner", nominal_gsm=150.0),
+            ArticleDB(id="KL_175", name="Kraftliner", product_group="Liner", nominal_gsm=175.0),
+            
+            # Testliner (100% újrahasznosított rostból készült fedőréteg)
+            ArticleDB(id="TL_100", name="Testliner", product_group="Liner", nominal_gsm=100.0),
+            ArticleDB(id="TL_140", name="Testliner", product_group="Liner", nominal_gsm=140.0),
+            
+            # White-Top Liner (Fehérített fedőréteg a jobb nyomtathatóságért)
+            ArticleDB(id="WTL_120", name="White-Top Liner", product_group="Liner", nominal_gsm=120.0),
+            
+            # Fluting (Hullámpapír alapanyag, a belső hullámréteghez)
+            ArticleDB(id="FL_90", name="Fluting", product_group="Medium", nominal_gsm=90.0),
         ]
         
+        # Adatok mentése (Upsert/Merge logika: ha létezik frissíti, ha nincs létrehozza)
+        print("🔧 Gépek regisztrálása...")
         for machine in machines:
             db.merge(machine)  
         
+        print("📄 Termékkatalógus frissítése...")
         for article in articles:
             db.merge(article)
         
-        print(f"✅ Seeded {len(machines)} machines and {len(articles)} articles")
+        print(f"✅ Sikeresen betöltve {len(machines)} gép és {len(articles)} termék.")
+        print("-" * 40 + "\n")
 
 if __name__ == "__main__":
     seed_master_data()

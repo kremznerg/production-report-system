@@ -1,3 +1,11 @@
+"""
+UI ADATKEZELŐ MODUL (DATA LOADER)
+=================================
+Ez a modul híd szerepet tölt be az adatbázis (backend) és a Streamlit (frontend) között. 
+Felelős az adatok hatékony lekérdezéséért, szűréséért és a Pydantic modellekbe 
+történő validálásáért a megjelenítés előtt.
+"""
+
 import pandas as pd
 from datetime import datetime, timedelta, date
 from typing import List, Dict, Tuple, Optional
@@ -10,24 +18,37 @@ from src.models import (
 )
 
 def load_articles_map() -> Dict[str, str]:
-    """Betölti a termék törzsadatokat és egy formázott név-térképet ad vissza."""
+    """
+    Betölti a termék törzsadatokat és egy formázott név-térképet ad vissza.
+    A kulcs a termék azonosítója, az érték pedig a név és grammsúly kombinációja.
+    """
     with get_db() as db:
         articles = db.query(ArticleDB).all()
         return {a.id: f"{a.name} {a.nominal_gsm:.0f}g" for a in articles}
 
 def load_machines() -> List[Machine]:
-    """Betölti a gép törzsadatokat és Pydantic modellekké alakítja őket."""
+    """
+    Betölti a regisztrált papírgépek listáját.
+    A nyers adatbázis rekordokat Pydantic modellekké alakítja a biztonságos kezelés érdekében.
+    """
     with get_db() as db:
         db_machines = db.query(MachineDB).all()
         return [Machine.model_validate(m) for m in db_machines]
 
-def get_daily_data(machine_id: str, target_date: date):
-    """Lekéri a nyers eseményeket és az előre kalkulált napi összesítőt is."""
+def get_daily_data(machine_id: str, target_date: date) -> Tuple[List[ProductionEvent], Optional[DailySummary], List[QualityMeasurement]]:
+    """
+    Összetett lekérdezés, amely egy adott nap minden fontos adatát visszaadja.
+    
+    Tartalma:
+    1. Nyers események (Timeline és statisztikák alapja).
+    2. Előre kalkulált napi összefoglaló (KPI mutatók).
+    3. Minőségi labor mérések.
+    """
     with get_db() as db:
         start_dt = datetime.combine(target_date, datetime.min.time())
         end_dt = datetime.combine(target_date, datetime.max.time())
         
-        # 1. Nyers események (idővonalhoz és lebontáshoz)
+        # 1. ESEMÉNYEK LEKÉRÉSE
         db_events = db.query(ProductionEventDB).filter(
             ProductionEventDB.machine_id == machine_id,
             ProductionEventDB.timestamp >= start_dt,
@@ -35,14 +56,14 @@ def get_daily_data(machine_id: str, target_date: date):
         ).all()
         events = [ProductionEvent.model_validate(e) for e in db_events]
         
-        # 2. Előre kalkulált napi összesítő
+        # 2. KPI ÖSSZEFOGLALÓ LEKÉRÉSE
         db_summary = db.query(DailySummaryDB).filter(
             DailySummaryDB.machine_id == machine_id,
             DailySummaryDB.date == target_date
         ).first()
         summary = DailySummary.model_validate(db_summary) if db_summary else None
         
-        # 3. Minőségi adatok (grafikonokhoz)
+        # 3. LABORADATOK LEKÉRÉSE
         db_quality = db.query(QualityDataDB).filter(
             QualityDataDB.machine_id == machine_id,
             QualityDataDB.timestamp >= start_dt,
@@ -53,7 +74,10 @@ def get_daily_data(machine_id: str, target_date: date):
         return events, summary, quality
 
 def get_pareto_data(machine_id: str, target_date: date, days: int = 30) -> pd.DataFrame:
-    """Lekéri a cél dátumot megelőző X nap leállási okait Pareto elemzéshez."""
+    """
+    Összesíti az állásidőket okok szerint a Pareto elemzéshez.
+    Alapértelmezetten az elmúlt 30 nap adatait vizsgálja a statisztikai súlyhoz.
+    """
     with get_db() as db:
         start_date = target_date - timedelta(days=days)
         
@@ -77,7 +101,10 @@ def get_pareto_data(machine_id: str, target_date: date, days: int = 30) -> pd.Da
         return pareto.sort_values(by="Időtartam (perc)", ascending=False).head(5)
 
 def get_trend_data(machine_id: str, target_date: date, days: int = 10) -> List[DailySummary]:
-    """Lekéri az elmúlt X nap összesítő adatait trendvonalhoz."""
+    """
+    Lekéri a KPI mutatók alakulását az utolsó X napra vonatkozóan.
+    Ezt használják a KPI kártyák alatti kisméretű trendvonalak (sparklines).
+    """
     with get_db() as db:
         start_date = target_date - timedelta(days=days-1)
         db_summaries = db.query(DailySummaryDB).filter(
@@ -88,8 +115,11 @@ def get_trend_data(machine_id: str, target_date: date, days: int = 10) -> List[D
         
         return [DailySummary.model_validate(s) for s in db_summaries]
 
-def get_data_availability():
-    """Lekéri az adatbázisból az elérhető dátumtartományt."""
+def get_data_availability() -> Tuple[Optional[datetime], Optional[datetime], int]:
+    """
+    Meghatározza az adatbázis aktuális állapotát.
+    Visszaadja a legkorábbi és legfrissebb dátumot, valamint az összes esemény darabszámát.
+    """
     with get_db() as db:
         res = db.query(
             func.min(ProductionEventDB.timestamp),

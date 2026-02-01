@@ -1,3 +1,10 @@
+"""
+PDF EXPORTÁLÓ MODUL (PDF REPORT GENERATION)
+==========================================
+Ez a modul felelős a professzionális, nyomtatható PDF gyártási jelentések 
+generálásáért a ReportLab könyvtár segítségével.
+"""
+
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -9,7 +16,7 @@ from reportlab.pdfbase.pdfmetrics import registerFontFamily
 import os
 from datetime import datetime
 
-# Font regisztráció a magyar ékezetekhez (Bebundlázott Arial - a legbiztosabb megoldás)
+# --- BETŰTÍPUS REGISZTRÁCIÓ A MAGYAR ÉKEZETEKHEZ ---
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Arial.ttf")
 FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Arial-Bold.ttf")
@@ -22,10 +29,9 @@ try:
         BASE_FONT = 'Arial'
         BOLD_FONT = 'Arial-Bold'
     else:
-        # Ha valamiért nem találja, legyen a standard Helvetica (ékezetek nélkül sajnos)
         BASE_FONT = 'Helvetica'
         BOLD_FONT = 'Helvetica-Bold'
-except Exception as e:
+except Exception:
     BASE_FONT = 'Helvetica'
     BOLD_FONT = 'Helvetica-Bold'
 
@@ -35,7 +41,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     styles = getSampleStyleSheet()
     
-    # Központi stílusok a regisztrált betűtípussal
+    # Központi stílusok
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName=BOLD_FONT, fontSize=18, alignment=1)
     section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontName=BOLD_FONT, fontSize=12, color=colors.HexColor("#0d6efd"), spaceBefore=12, spaceAfter=8)
     normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontName=BASE_FONT, fontSize=9)
@@ -43,18 +49,13 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
 
     elements = []
 
-    # 1. FEJLÉC (Logó + Cím)
+    # --- 1. FEJLÉC (Logó + Cím) ---
     logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "logo.jpeg")
-    header_table_data = []
-    
     if os.path.exists(logo_path):
         img = Image(logo_path)
-        # Képarány megtartása
         aspect = img.imageWidth / img.imageHeight
         img.drawHeight = 40
         img.drawWidth = 40 * aspect
-        
-        # 3 oszlopos elrendezés: [Logó, Cím, Üres hely], hogy a cím középen legyen
         header_table_data = [[img, Paragraph("NAPI TERMELÉSI JELENTÉS", title_style), ""]]
         header_table = Table(header_table_data, colWidths=[60, 415, 60])
         header_table.setStyle(TableStyle([
@@ -66,13 +67,24 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         elements.append(Paragraph(f"NAPI TERMELÉSI JELENTÉS", title_style))
         elements.append(Paragraph(f"<b>Cég:</b> EcoPaper Solutions", normal_style))
 
-    elements.append(Paragraph(f"<b>Gép:</b> {machine_id} | <b>Dátum:</b> {selected_date.strftime('%Y-%m-%d')}", normal_style))
+    # Info táblázat: Gép/Dátum (bal) és Generálás ideje (jobb)
+    info_style_right = ParagraphStyle('NormalRight', parent=normal_style, alignment=2)
+    info_data = [[
+        Paragraph(f"<b>Gép:</b> {machine_id} | <b>Dátum:</b> {selected_date.strftime('%Y-%m-%d')}", normal_style),
+        Paragraph(f"Jelentés készült: {datetime.now().strftime('%Y-%m-%d %H:%M')}", info_style_right)
+    ]]
+    info_table = Table(info_data, colWidths=[300, 235])
+    info_table.setStyle(TableStyle([
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+        ('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
+    ]))
+    elements.append(info_table)
     elements.append(Spacer(1, 10))
 
-    # 2. KPI ÖSSZEFOGLALÓ
+    # --- 2. KPI ÖSSZEFOGLALÓ ---
     if summary:
         elements.append(Paragraph("Teljesítménymutatók", section_style))
-        
         kpi_data = [
             [Paragraph("<b>Megnevezés</b>", normal_style), Paragraph("<b>Érték</b>", normal_style), Paragraph("<b>Mérték</b>", normal_style)],
             [Paragraph("TERMELÉS (Tény / Cél)", normal_style), f"{summary.total_tons:.1f} / {summary.target_tons:.1f}", "t"],
@@ -84,8 +96,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
             [Paragraph("ÖSSZES ÁLLÁSIDŐ", normal_style), f"{summary.total_downtime_min:.0f}", "perc"],
             [Paragraph("SZAKADÁSSZÁM", normal_style), f"{summary.break_count}", "db"]
         ]
-        
-        kt = Table(kpi_data, colWidths=[200, 100, 80])
+        kt = Table(kpi_data, colWidths=[250, 100, 100])
         kt.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), BASE_FONT),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -99,7 +110,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         elements.append(kt)
         elements.append(Spacer(1, 15))
 
-        # 3. KÖZMŰVEK (Abszolút + Fajlagos)
+        # --- 3. KÖZMŰVEK (Abszolút + Fajlagos) ---
         elements.append(Paragraph("Erőforrás-felhasználás", section_style))
         u_data = [
             [Paragraph("<b>Erőforrás</b>", normal_style), Paragraph("<b>Összes fogyasztás</b>", normal_style), Paragraph("<b>Fajlagos mutató</b>", normal_style)],
@@ -108,7 +119,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
             ["Gőz", f"{(summary.spec_steam_t_t * summary.total_tons):.1f} t", f"{summary.spec_steam_t_t:.2f} t/t"],
             ["Alapanyag (Rost)", f"{(summary.spec_fiber_t_t * summary.total_tons):.1f} t", f"{summary.spec_fiber_t_t:.2f} t/t"]
         ]
-        ut = Table(u_data, colWidths=[150, 130, 110])
+        ut = Table(u_data, colWidths=[150, 150, 150])
         ut.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), BASE_FONT),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -121,11 +132,10 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         elements.append(ut)
         elements.append(Spacer(1, 10))
 
-    # 4. GYÁRTOTT TERMÉKEK ÉS MINŐSÉG
+    # --- 4. GYÁRTOTT TERMÉKEK ÉS MINŐSÉG ---
     run_events = [e for e in events if e.event_type == "RUN"]
     if run_events and article_names:
         elements.append(Paragraph("Gyártási és minőségi adatok termékenként", section_style))
-        
         prod_stats = {}
         for e in run_events:
             aid = e.article_id
@@ -152,8 +162,8 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
             Paragraph("<b>Súly (t)</b>", normal_style), 
             Paragraph("<b>Seb (m/p)</b>", normal_style),
             Paragraph("<b>GSM</b>", normal_style), 
-            Paragraph("<b>Nedv %</b>", normal_style), 
-            Paragraph("<b>Szil</b>", normal_style)
+            Paragraph("<b>Nedv (%)</b>", normal_style), 
+            Paragraph("<b>Szil (kN/m)</b>", normal_style)
         ]
         table_data = [header]
         
@@ -172,7 +182,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
                 f"{avg_str:.1f}" if avg_str > 0 else "-"
             ])
 
-        pt = Table(table_data, colWidths=[150, 50, 60, 50, 50, 50])
+        pt = Table(table_data, colWidths=[150, 60, 60, 60, 60, 60])
         pt.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), BASE_FONT),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -185,13 +195,13 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         elements.append(pt)
         elements.append(Spacer(1, 15))
 
-    # 5. LEÁLLÁSI STATISZTIKA
+    # --- 5. LEÁLLÁSI STATISZTIKA ---
     stop_events = [e for e in events if e.event_type in ["STOP", "BREAK"]]
     if stop_events:
         elements.append(Paragraph("Állásidők és leállási okok", section_style))
         stop_stats = {}
         for s in stop_events:
-            reason = s.description if s.description else ( "Tervszerű leállás" if s.event_type == "STOP" else "Papiros szakadás")
+            reason = s.description if s.description else ("Tervszerű leállás" if s.event_type == "STOP" else "Papiros szakadás")
             if reason not in stop_stats:
                 stop_stats[reason] = 0
             stop_stats[reason] += (s.duration_seconds / 60)
@@ -201,7 +211,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         for reason in sorted(stop_stats, key=stop_stats.get, reverse=True):
             stop_table_data.append([Paragraph(reason, normal_style), f"{stop_stats[reason]:.0f}"])
             
-        st = Table(stop_table_data, colWidths=[340, 100])
+        st = Table(stop_table_data, colWidths=[350, 100])
         st.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), BASE_FONT),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
@@ -211,9 +221,6 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
         ]))
         elements.append(st)
 
-    # LÁBJEGYZET
-    elements.append(Spacer(1, 15))
-    elements.append(Paragraph(f"Jelentés készült: {datetime.now().strftime('%Y-%m-%d %H:%M')}", normal_style))
 
     doc.build(elements)
     buffer.seek(0)

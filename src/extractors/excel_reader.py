@@ -1,5 +1,8 @@
 """
-Excel data reader for planning, lab, and utility data.
+EXCEL ADATBEOLVASÓ (EXCEL READER)
+=================================
+Ez a modul felelős a külső fájlokból (Excel) érkező adatok beolvasásáért.
+Kezeli a termelési tervet, a laboratóriumi méréseket és a közműfogyasztásokat.
 """
 
 import pandas as pd
@@ -10,25 +13,26 @@ from typing import List, Dict, Any
 
 from ..config import settings
 
+# Naplózás beállítása a modulhoz
 logger = logging.getLogger(__name__)
 
 class ExcelReader:
     """
     Általános Excel olvasó osztály.
-    Beolvassa a tervezési, labor és közmű adatokat a megadott fájlokból.
+    Centralizáltan kezeli az Excel alapú forrásfájlok beolvasását és oszlop-mappingjét.
     """
     
     def read_planning(self) -> List[Dict[str, Any]]:
         """
-        Beolvassa a napi termelési tervet az Excel fájlból.
+        Beolvassa a napi termelési tervet (planning.xlsx).
         
-        Elvárt oszlopok:
-        - Dátum, Gép, Termék, Terv_Sebesség, Terv_Tonna
+        Elvárt oszlopok a fájlban:
+        - Date, Machine, Article, Target_Speed, Target_Tons
         
         Returns:
-            Tervezési adatok listája (dict formátumban)
+            List[Dict[str, Any]]: Tervezési rekordok listája a belső modellnek megfelelő kulcsokkal.
         """
-        file_path = settings.PLANNING_FILE
+        file_path: Path = settings.PLANNING_FILE
         
         if not file_path.exists():
             logger.warning(f"Tervezési fájl nem található: {file_path}")
@@ -39,10 +43,10 @@ class ExcelReader:
         try:
             df = pd.read_excel(file_path)
             
-            # Oszlopok átnevezése a belső modellnek megfelelően
+            # Oszlopok átnevezése a belső adatbázis sémának megfelelően
             df.columns = ['date', 'machine_id', 'article_id', 'target_speed', 'target_quantity_tons']
             
-            # Dátum konverzió
+            # Dátum típus kényszerítése és hibakezelés
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.date
             df.dropna(subset=['date'], inplace=True)
             
@@ -54,15 +58,15 @@ class ExcelReader:
     
     def read_lab_data(self) -> List[Dict[str, Any]]:
         """
-        Beolvassa a laboratóriumi minőségi méréseket.
+        Beolvassa a laboratóriumi minőségi méréseket (lab_data.xlsx).
         
         Elvárt oszlopok:
-        - Időbélyeg, Gép, Termék, Nedvesség_%, Súly_GSM, Szilárdság_kNm
+        - Timestamp, Machine, Article, Moisture_%, GSM, Strength_kNm
         
         Returns:
-            Minőségi mérések listája (dict formátumban)
+            List[Dict[str, Any]]: Minőségi mérések listája szótár formátumban.
         """
-        file_path = settings.LAB_DATA_FILE
+        file_path: Path = settings.LAB_DATA_FILE
         
         if not file_path.exists():
             logger.warning(f"Labor adatfájl nem található: {file_path}")
@@ -73,10 +77,10 @@ class ExcelReader:
         try:
             df = pd.read_excel(file_path)
             
-            # Oszlopok átnevezése
+            # Oszlopok átnevezése a belső modellek kulcsaihoz igazítva
             df.columns = ['timestamp', 'machine_id', 'article_id', 'moisture_pct', 'gsm_measured', 'strength_knm']
             
-            # Időbélyeg konverzió
+            # Időbélyegek konvertálása és érvénytelen sorok szűrése
             df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
             df.dropna(subset=['timestamp'], inplace=True)
             
@@ -88,15 +92,15 @@ class ExcelReader:
     
     def read_utilities(self) -> List[Dict[str, Any]]:
         """
-        Beolvassa a közműfogyasztási adatokat.
+        Beolvassa a közműfogyasztási (energia, víz, stb.) adatokat (utilities.xlsx).
         
         Elvárt oszlopok:
-        - Dátum, Gép, Víz_m3, Áram_kWh, Gőz_tonna, Rost_tonna, Adalékanyag_kg
+        - Date, Machine, Water_m3, Electricity_kWh, Steam_tons, Fiber_tons, Additives_kg
         
         Returns:
-            Közműadatok listája (dict formátumban)
+            List[Dict[str, Any]]: Közműfogyasztási adatok listája.
         """
-        file_path = settings.UTILITIES_FILE
+        file_path: Path = settings.UTILITIES_FILE
         
         if not file_path.exists():
             logger.warning(f"Közmű adatfájl nem található: {file_path}")
@@ -107,10 +111,10 @@ class ExcelReader:
         try:
             df = pd.read_excel(file_path)
             
-            # Oszlopok átnevezése
+            # Oszlopok leképezése az adatbázis sémára
             df.columns = ['date', 'machine_id', 'water_m3', 'electricity_kwh', 'steam_tons', 'fiber_tons', 'additives_kg']
             
-            # Dátum konverzió
+            # Dátum validáció és tisztítás
             df['date'] = pd.to_datetime(df['date'], errors='coerce').dt.date
             df.dropna(subset=['date'], inplace=True)
             
