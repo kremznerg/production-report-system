@@ -9,19 +9,20 @@ from reportlab.pdfbase.pdfmetrics import registerFontFamily
 import os
 from datetime import datetime
 
-# Font regisztráció a magyar ékezetekhez (DejaVu Sans - a legbiztosabb ékezetes font)
+# Font regisztráció a magyar ékezetekhez (Bebundlázott Arial - a legbiztosabb megoldás)
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "DejaVuSans.ttf")
-FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "DejaVuSans-Bold.ttf")
+FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Arial.ttf")
+FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Arial-Bold.ttf")
 
 try:
     if os.path.exists(FONT_PATH):
-        pdfmetrics.registerFont(TTFont('DejaVuSans', FONT_PATH))
-        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', FONT_BOLD_PATH))
-        registerFontFamily('DejaVuSans', normal='DejaVuSans', bold='DejaVuSans-Bold')
-        BASE_FONT = 'DejaVuSans'
-        BOLD_FONT = 'DejaVuSans-Bold'
+        pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
+        pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
+        registerFontFamily('Arial', normal='Arial', bold='Arial-Bold')
+        BASE_FONT = 'Arial'
+        BOLD_FONT = 'Arial-Bold'
     else:
+        # Ha valamiért nem találja, legyen a standard Helvetica (ékezetek nélkül sajnos)
         BASE_FONT = 'Helvetica'
         BOLD_FONT = 'Helvetica-Bold'
 except Exception as e:
