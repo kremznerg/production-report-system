@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: production_dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - PERSIST_DATA=true
+    restart: always

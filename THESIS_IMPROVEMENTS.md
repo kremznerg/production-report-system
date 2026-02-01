@@ -21,7 +21,7 @@
 ## 4. Automatizálás és DevOps
 
 - [X] **GitHub Actions**: Automatikus CI pipeline létrehozása (minden push-ra lefutó tesztek).
-- [ ] **Dockerizálás**: Az alkalmazás konténerbe csomagolása a könnyű telepíthetőségért.
+- [X] **Dockerizálás**: Az alkalmazás konténerbe csomagolása a könnyű telepíthetőségért.
 
 ## 5. Vizualizáció és Felhasználói Élmény (UI/UX)
 
