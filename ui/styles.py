@@ -69,14 +69,23 @@ def apply_custom_css():
     }
 
     /* COMPACT SIDEBAR */
-    section[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-        gap: 0.5rem !important;
+    [data-testid="stSidebarContent"] {
+        padding-top: 0rem !important;
+    }
+    
+    /* Csak a legfelső szintű blokkot húzzuk fel, ne a beágyazottakat */
+    [data-testid="stSidebarContent"] > div:first-child {
+        margin-top: -2.5rem !important;
+    }
+
+    section[data-testid="stSidebar"] div.stVerticalBlock {
+        gap: 0.3rem !important;
     }
 
     section[data-testid="stSidebar"] h1 {
-        margin-top: 10px !important;
-        margin-bottom: 10px !important;
-        font-size: 1.8rem !important;
+        margin-top: 0px !important;
+        margin-bottom: 2px !important;
+        font-size: 1.6rem !important;
     }
 
     /* SIDEBAR INPUTS HIGHLIGHT */

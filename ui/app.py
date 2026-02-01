@@ -48,7 +48,10 @@ apply_custom_css()
 def render_sidebar():
     """Az oldalsáv (sidebar) tartalmának felépítése."""
     with st.sidebar:
-        st.image("assets/logo.jpeg", width=200)
+        # Logó középre igazítása és méretének finomhangolása (hogy ne legyen túl nagy/pixeles)
+        c1, c2, c3 = st.columns([1, 6, 1])
+        with c2:
+            st.image("assets/logo.jpeg", use_container_width=True)
         st.title("Vezérlőpult")
         st.markdown("---")
         
@@ -115,12 +118,16 @@ def render_sidebar():
                 st.error(f"PDF hiba: {str(ex)}")
 
         st.markdown("---")
-        with st.expander("Elérhető adatok"):
-            if total_events > 0 and min_date and max_date:
-                st.caption(f"**Időszak:** {min_date.strftime('%Y-%m-%d')} - {max_date.strftime('%Y-%m-%d')}")
-                st.caption(f"**Összes bejegyzés:** {total_events:,} db")
-            else:
-                st.warning("Nincs adat az adatbázisban.")
+        if total_events > 0 and min_date and max_date:
+            st.markdown(f"""
+            <div style='font-size: 0.82rem; color: #6c757d; line-height: 1.4; padding: 0 5px;'>
+                <b style='color: #495057;'>ELÉRHETŐ ADATOK</b><br>
+                <span>{min_date.strftime('%Y-%m-%d')} - {max_date.strftime('%Y-%m-%d')}</span><br>
+                <span>{total_events:,} bejegyzés</span>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("Nincs adat az adatbázisban.")
                 
     return selected_machine_id, selected_date, machine_options
 
