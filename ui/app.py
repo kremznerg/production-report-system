@@ -48,7 +48,7 @@ apply_custom_css()
 def render_sidebar():
     """Az oldalsáv (sidebar) tartalmának felépítése."""
     with st.sidebar:
-        st.image("assets/logo.jpeg", width='stretch')
+        st.image("assets/logo.jpeg", width=200)
         st.title("Vezérlőpult")
         st.markdown("---")
         
