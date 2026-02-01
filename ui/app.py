@@ -23,8 +23,8 @@ from src.pipeline import Pipeline
 
 # --- PAGE CONFIG ---
 st.set_page_config(
-    page_title="Operations Dashboard",
-    page_icon="assets/page_icon.png",
+    page_title="EPS Dashboard",
+    page_icon="assets/logo.jpeg",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -37,7 +37,7 @@ apply_custom_css()
 
 # --- OLDALSÁV (SIDEBAR) ---
 with st.sidebar:
-    st.image(str(project_root / "assets" / "factory.png"), width=100)
+    st.image("assets/logo.jpeg", use_container_width=True)
     st.title("Vezérlőpult")
     st.markdown("---")
     
@@ -79,7 +79,7 @@ with st.sidebar:
                     article_names=pdf_article_names
                 )
                 st.download_button(
-                    label="📄 Napi jelentés (PDF)",
+                    label="Napi jelentés (PDF)",
                     data=pdf_buffer,
                     file_name=f"Report_{selected_machine_id}_{selected_date}.pdf",
                     mime="application/pdf",
@@ -114,6 +114,7 @@ st.components.v1.html(
 
 col_title, col_logo = st.columns([4, 1], gap="large")
 with col_title:
+    st.subheader("EcoPaper Solutions")
     st.title(f"{machine_options[selected_machine_id]} Operations Dashboard")
     st.markdown(f"**Teljesítmény-analitikai dashboard** | {selected_date.strftime('%Y. %m. %d.')}")
 
@@ -276,5 +277,5 @@ else:
             d_col2.info("Nincs elég adat a Pareto elemzéshez.")
 
 st.divider()
-st.caption("Operations Dashboard | Kremzner Gábor 2026")
+st.caption("EcoPaper Solutions Dashboard | Kremzner Gábor 2026")
 st.markdown("<a href='#top' class='back-to-top'>↑</a>", unsafe_allow_html=True)

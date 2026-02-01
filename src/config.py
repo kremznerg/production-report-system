@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """
     
     # --- PROJEKT ALAPOK ---
-    PROJECT_NAME: str = "Production Report System"
+    PROJECT_NAME: str = "EcoPaper Solutions Operations"
     LOG_LEVEL: str = "INFO"
 
     # --- ÚTVONALAK ---

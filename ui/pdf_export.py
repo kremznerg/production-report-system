@@ -2,7 +2,7 @@ from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
@@ -34,17 +34,38 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
     styles = getSampleStyleSheet()
     
     # Központi stílusok a regisztrált betűtípussal
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName=BOLD_FONT, fontSize=20, alignment=1)
-    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontName=BOLD_FONT, fontSize=14, color=colors.HexColor("#0d6efd"), spaceBefore=12, spaceAfter=8)
-    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontName=BASE_FONT, fontSize=10)
-    normal_bold_style = ParagraphStyle('NormalBold', parent=styles['Normal'], fontName=BOLD_FONT, fontSize=10)
+    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontName=BOLD_FONT, fontSize=18, alignment=1)
+    section_style = ParagraphStyle('Section', parent=styles['Heading2'], fontName=BOLD_FONT, fontSize=12, color=colors.HexColor("#0d6efd"), spaceBefore=12, spaceAfter=8)
+    normal_style = ParagraphStyle('Normal', parent=styles['Normal'], fontName=BASE_FONT, fontSize=9)
+    normal_bold_style = ParagraphStyle('NormalBold', parent=styles['Normal'], fontName=BOLD_FONT, fontSize=9)
 
     elements = []
 
-    # 1. FEJLÉC
-    elements.append(Paragraph(f"NAPI TERMELÉSI JELENTÉS", title_style))
+    # 1. FEJLÉC (Logó + Cím)
+    logo_path = os.path.join(os.path.dirname(__file__), "..", "assets", "logo.jpeg")
+    header_table_data = []
+    
+    if os.path.exists(logo_path):
+        img = Image(logo_path)
+        # Képarány megtartása
+        aspect = img.imageWidth / img.imageHeight
+        img.drawHeight = 40
+        img.drawWidth = 40 * aspect
+        
+        # 3 oszlopos elrendezés: [Logó, Cím, Üres hely], hogy a cím középen legyen
+        header_table_data = [[img, Paragraph("NAPI TERMELÉSI JELENTÉS", title_style), ""]]
+        header_table = Table(header_table_data, colWidths=[60, 415, 60])
+        header_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ]))
+        elements.append(header_table)
+    else:
+        elements.append(Paragraph(f"NAPI TERMELÉSI JELENTÉS", title_style))
+        elements.append(Paragraph(f"<b>Cég:</b> EcoPaper Solutions", normal_style))
+
     elements.append(Paragraph(f"<b>Gép:</b> {machine_id} | <b>Dátum:</b> {selected_date.strftime('%Y-%m-%d')}", normal_style))
-    elements.append(Spacer(1, 15))
+    elements.append(Spacer(1, 10))
 
     # 2. KPI ÖSSZEFOGLALÓ
     if summary:

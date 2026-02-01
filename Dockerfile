@@ -4,11 +4,10 @@ FROM python:3.12-slim
 # 2. Munkakönyvtár beállítása a konténeren belül
 WORKDIR /app
 
-# 3. Rendszer függőségek telepítése (szükséges lehet a PDF generáláshoz vagy más könyvtárakhoz)
+# 3. Rendszer függőségek telepítése
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
 # 4. Python függőségek másolása és telepítése
