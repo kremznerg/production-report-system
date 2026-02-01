@@ -9,25 +9,22 @@ from reportlab.pdfbase.pdfmetrics import registerFontFamily
 import os
 from datetime import datetime
 
-# Font regisztráció a magyar ékezetekhez
-# A betűtípusokat a projekt mappájából olvassuk, hogy felhőben (Streamlit Cloud) is működjön
+# Font regisztráció a magyar ékezetekhez (DejaVu Sans - a legbiztosabb ékezetes font)
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
-FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Roboto-Regular.ttf")
-FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Roboto-Bold.ttf")
+FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "DejaVuSans.ttf")
+FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "DejaVuSans-Bold.ttf")
 
 try:
     if os.path.exists(FONT_PATH):
-        pdfmetrics.registerFont(TTFont('Roboto', FONT_PATH))
-        pdfmetrics.registerFont(TTFont('Roboto-Bold', FONT_BOLD_PATH))
-        registerFontFamily('Roboto', normal='Roboto', bold='Roboto-Bold')
-        BASE_FONT = 'Roboto'
-        BOLD_FONT = 'Roboto-Bold'
+        pdfmetrics.registerFont(TTFont('DejaVuSans', FONT_PATH))
+        pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', FONT_BOLD_PATH))
+        registerFontFamily('DejaVuSans', normal='DejaVuSans', bold='DejaVuSans-Bold')
+        BASE_FONT = 'DejaVuSans'
+        BOLD_FONT = 'DejaVuSans-Bold'
     else:
-        # Fallback ha nem találná a fájlt
         BASE_FONT = 'Helvetica'
         BOLD_FONT = 'Helvetica-Bold'
 except Exception as e:
-    print(f"Font error: {e}")
     BASE_FONT = 'Helvetica'
     BOLD_FONT = 'Helvetica-Bold'
 
