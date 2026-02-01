@@ -37,7 +37,7 @@ apply_custom_css()
 
 # --- OLDALSÁV (SIDEBAR) ---
 with st.sidebar:
-    st.image("assets/logo.jpeg", use_container_width=True)
+    st.image("assets/logo.jpeg", width='stretch')
     st.title("Vezérlőpult")
     st.markdown("---")
     
@@ -142,14 +142,30 @@ else:
             st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), width="stretch", config={'displayModeBar': False})
         
         # KPI 2: OEE
+        oee_val = summary.oee_pct
+        # Szigorúbb határértékek: 90, 80, 70
+        if oee_val >= 90: oee_color = "#2ecc71"    # Zöld
+        elif oee_val >= 80: oee_color = "#f1c40f"  # Sárga
+        elif oee_val >= 70: oee_color = "#e67e22"  # Narancs
+        else: oee_color = "#e74c3c"                # Piros
+        
         with col2:
+            # Egyedi stílus injektálása csak ehhez az oszlophoz a keret színezéséhez
+            st.markdown(f"""
+                <style>
+                    div[data-testid="column"]:nth-of-type(2) div[data-testid="stMetric"] {{
+                        border-left: 5px solid {oee_color} !important;
+                    }}
+                </style>
+            """, unsafe_allow_html=True)
+            
             oee_formula = f"{summary.availability_pct:.1f}% (R) × {summary.performance_pct:.1f}% (T) × {summary.quality_pct:.1f}% (M)"
-            st.metric("OEE MUTATÓ", f"{summary.oee_pct:.1f} %", 
-                    help=f"Teljes eszközhatékonyság számítása:\n\n{oee_formula} = {summary.oee_pct:.1f}%\n\n"
+            st.metric("OEE MUTATÓ", f"{oee_val:.1f} %", 
+                    help=f"Teljes eszközhatékonyság számítása:\n\n{oee_formula} = {oee_val:.1f}%\n\n"
                          f"R = Rendelkezésre állás\n"
                          f"T = Teljesítmény index\n"
                          f"M = Minőségi mutató")
-            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], oee_color), width="stretch", config={'displayModeBar': False})
         
         # KPI 3: Rendelkezésre állás
         with col3:
@@ -238,10 +254,12 @@ else:
         pm_col1, pm_col2 = st.columns([2, 1])
         with pm_col1: st.plotly_chart(create_article_bar_chart(article_mix), width="stretch")
         with pm_col2: st.plotly_chart(create_article_pie_chart(article_mix), width="stretch")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
     # --- 4. MINŐSÉGI ANALÍTIKA ---
+    st.markdown('<div class="st-card">', unsafe_allow_html=True)
     q1, q2 = st.columns([0.05, 0.95])
     with q1: st.image("assets/flask.png", width=64)
     with q2: st.subheader("Minőségi analitika")
@@ -257,10 +275,12 @@ else:
         st.plotly_chart(create_quality_charts(df_q), width="stretch")
     else:
         st.info("Nincsenek laboradatok ehhez az időszakhoz.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
     # --- 5. TERMELÉSI ZAVAROK ---
+    st.markdown('<div class="st-card">', unsafe_allow_html=True)
     a1, a2 = st.columns([0.05, 0.95])
     with a1: st.image("assets/alert.png", width=64)
     with a2: st.subheader("Termelési zavarok")
@@ -275,6 +295,7 @@ else:
             with d_col2: st.plotly_chart(create_pareto_chart(pareto_df), width="stretch")
         else:
             d_col2.info("Nincs elég adat a Pareto elemzéshez.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 st.divider()
 st.caption("EcoPaper Solutions Dashboard | Kremzner Gábor 2026")
