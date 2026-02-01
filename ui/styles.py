@@ -129,6 +129,8 @@ def apply_custom_css():
         display: flex;
         align-items: center;
         justify-content: center;
+        line-height: 1;
+        padding-bottom: 5px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         cursor: pointer;
         z-index: 9999;
