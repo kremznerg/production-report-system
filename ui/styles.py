@@ -134,9 +134,5 @@ def apply_custom_css():
         box-shadow: 0 6px 16px rgba(0,0,0,0.3);
         color: white !important;
     }
-    /* OEE SPECIAL CARD MARKER */
-    #oee-marker + div[data-testid="stMetric"] {
-        transition: all 0.4s ease;
-    }
 </style>
 """, unsafe_allow_html=True)

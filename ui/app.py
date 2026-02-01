@@ -142,32 +142,14 @@ else:
             st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), width="stretch", config={'displayModeBar': False})
         
         # KPI 2: OEE
-        oee_val = summary.oee_pct
-        # Szigorúbb határértékek: 90, 80, 70
-        if oee_val >= 90: oee_color = "#2ecc71"    # Zöld
-        elif oee_val >= 80: oee_color = "#f1c40f"  # Sárga
-        elif oee_val >= 70: oee_color = "#e67e22"  # Narancs
-        else: oee_color = "#e74c3c"                # Piros
-        
         with col2:
-            # Marker és speciális stílus az OEE kártyához
-            st.markdown(f"""
-                <div id="oee-marker"></div>
-                <style>
-                    #oee-marker + div[data-testid="stMetric"] {{
-                        border-left: 6px solid {oee_color} !important;
-                        background-color: {oee_color}0D !important; /* ~5% opacity background */
-                    }}
-                </style>
-            """, unsafe_allow_html=True)
-            
             oee_formula = f"{summary.availability_pct:.1f}% (R) × {summary.performance_pct:.1f}% (T) × {summary.quality_pct:.1f}% (M)"
-            st.metric("OEE MUTATÓ", f"{oee_val:.1f} %", 
-                    help=f"Teljes eszközhatékonyság számítása:\n\n{oee_formula} = {oee_val:.1f}%\n\n"
+            st.metric("OEE MUTATÓ", f"{summary.oee_pct:.1f} %", 
+                    help=f"Teljes eszközhatékonyság számítása:\n\n{oee_formula} = {summary.oee_pct:.1f}%\n\n"
                          f"R = Rendelkezésre állás\n"
                          f"T = Teljesítmény index\n"
                          f"M = Minőségi mutató")
-            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], oee_color), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), width="stretch", config={'displayModeBar': False})
         
         # KPI 3: Rendelkezésre állás
         with col3:
