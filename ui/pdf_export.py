@@ -10,20 +10,24 @@ import os
 from datetime import datetime
 
 # Font regisztráció a magyar ékezetekhez
-FONT_PATH = "/System/Library/Fonts/Supplemental/Arial.ttf"
-FONT_BOLD_PATH = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+# A betűtípusokat a projekt mappájából olvassuk, hogy felhőben (Streamlit Cloud) is működjön
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
+FONT_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Roboto-Regular.ttf")
+FONT_BOLD_PATH = os.path.join(BASE_DIR, "assets", "fonts", "Roboto-Bold.ttf")
 
 try:
     if os.path.exists(FONT_PATH):
-        pdfmetrics.registerFont(TTFont('Arial', FONT_PATH))
-        pdfmetrics.registerFont(TTFont('Arial-Bold', FONT_BOLD_PATH))
-        registerFontFamily('Arial', normal='Arial', bold='Arial-Bold')
-        BASE_FONT = 'Arial'
-        BOLD_FONT = 'Arial-Bold'
+        pdfmetrics.registerFont(TTFont('Roboto', FONT_PATH))
+        pdfmetrics.registerFont(TTFont('Roboto-Bold', FONT_BOLD_PATH))
+        registerFontFamily('Roboto', normal='Roboto', bold='Roboto-Bold')
+        BASE_FONT = 'Roboto'
+        BOLD_FONT = 'Roboto-Bold'
     else:
+        # Fallback ha nem találná a fájlt
         BASE_FONT = 'Helvetica'
         BOLD_FONT = 'Helvetica-Bold'
-except:
+except Exception as e:
+    print(f"Font error: {e}")
     BASE_FONT = 'Helvetica'
     BOLD_FONT = 'Helvetica-Bold'
 
