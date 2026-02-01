@@ -82,11 +82,11 @@ def apply_custom_css():
     /* SIDEBAR INPUTS HIGHLIGHT */
     section[data-testid="stSidebar"] [data-testid="stSelectbox"],
     section[data-testid="stSidebar"] [data-testid="stDateInput"] {
-        background-color: #f1f3f5;
-        padding: 12px;
-        border-radius: 12px;
-        border: 1px solid #e9ecef;
-        margin-bottom: 5px;
+        background-color: #f1f3f5 !important;
+        padding: 12px !important;
+        border-radius: 12px !important;
+        border: 1px solid #dee2e6 !important;
+        margin-bottom: 10px !important;
     }
 
     section[data-testid="stSidebar"] hr {
