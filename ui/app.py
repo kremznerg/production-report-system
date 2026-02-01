@@ -150,11 +150,13 @@ else:
         else: oee_color = "#e74c3c"                # Piros
         
         with col2:
-            # Egyedi stílus injektálása csak ehhez az oszlophoz a keret színezéséhez
+            # Marker és speciális stílus az OEE kártyához
             st.markdown(f"""
+                <div id="oee-marker"></div>
                 <style>
-                    div[data-testid="column"]:nth-of-type(2) div[data-testid="stMetric"] {{
-                        border-left: 5px solid {oee_color} !important;
+                    #oee-marker + div[data-testid="stMetric"] {{
+                        border-left: 6px solid {oee_color} !important;
+                        background-color: {oee_color}0D !important; /* ~5% opacity background */
                     }}
                 </style>
             """, unsafe_allow_html=True)

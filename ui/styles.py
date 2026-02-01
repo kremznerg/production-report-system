@@ -33,8 +33,19 @@ def apply_custom_css():
     }
     
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-8px);
+        transform: translateY(-5px);
         box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.12);
+        border: 1px solid rgba(13, 110, 253, 0.2);
+    }
+
+    /* SECTION CARDS */
+    .st-card {
+        background: #ffffff;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #f1f3f5;
+        margin-bottom: 20px;
     }
 
     [data-testid="stMetricLabel"] {
@@ -122,6 +133,10 @@ def apply_custom_css():
         background: #0b5ed7;
         box-shadow: 0 6px 16px rgba(0,0,0,0.3);
         color: white !important;
+    }
+    /* OEE SPECIAL CARD MARKER */
+    #oee-marker + div[data-testid="stMetric"] {
+        transition: all 0.4s ease;
     }
 </style>
 """, unsafe_allow_html=True)
