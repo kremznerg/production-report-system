@@ -15,6 +15,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.pdfmetrics import registerFontFamily
 import os
 from datetime import datetime
+import pandas as pd
 
 # --- BETŰTÍPUS REGISZTRÁCIÓ A MAGYAR ÉKEZETEKHEZ ---
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -71,7 +72,7 @@ def generate_pdf_report(machine_id, selected_date, summary, events, quality=None
     info_style_right = ParagraphStyle('NormalRight', parent=normal_style, alignment=2)
     info_data = [[
         Paragraph(f"<b>Gép:</b> {machine_id} | <b>Dátum:</b> {selected_date.strftime('%Y-%m-%d')}", normal_style),
-        Paragraph(f"Jelentés készült: {datetime.now().strftime('%Y-%m-%d %H:%M')}", info_style_right)
+        Paragraph(f"Jelentés készült: {pd.Timestamp.now(tz='Europe/Budapest').strftime('%Y-%m-%d %H:%M')}", info_style_right)
     ]]
     info_table = Table(info_data, colWidths=[300, 235])
     info_table.setStyle(TableStyle([

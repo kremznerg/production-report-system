@@ -51,7 +51,7 @@ def render_sidebar():
         # Logó középre igazítása és méretének finomhangolása (hogy ne legyen túl nagy/pixeles)
         c1, c2, c3 = st.columns([1, 6, 1])
         with c2:
-            st.image("assets/logo.jpeg", use_container_width=True)
+            st.image("assets/logo.jpeg", width="stretch")
         st.title("Vezérlőpult")
         st.markdown("---")
         
