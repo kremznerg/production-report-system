@@ -2,6 +2,8 @@
 
 Ez egy professzionális, ipari környezetre tervezett **ETL (Extract-Transform-Load) és Vizualizációs rendszer** papírgyári termelési jelentések kezeléséhez. A projekt egy teljes körű megoldást kínál az adatgyűjtéstől az automatizált PDF jelentéskészítésig.
 
+https://eps-dashboard.streamlit.app/
+
 ---
 
 ## 🏗️ Főbb Mérföldkövek & Funkciók
@@ -95,5 +97,4 @@ A projekt az **EcoPaper Solutions** fiktív vállalat számára készült ipari 
 - **DevOps:** Docker, GitHub Actions
 
 ---
-https://eps-dashboard.streamlit.app/
 *Készült: Kremzner Gábor - 2026*
