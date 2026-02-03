@@ -86,8 +86,6 @@ Minden `push` művelet után a **GitHub Actions** automatikusan elvégzi ezt az 
 
 ---
 
-## 📞 Kapcsolat és Fejlesztés
-
 A projekt az **EcoPaper Solutions** fiktív vállalat számára készült ipari esettanulmányként. 
 
 **Technológiai stack:**
@@ -97,4 +95,5 @@ A projekt az **EcoPaper Solutions** fiktív vállalat számára készült ipari 
 - **DevOps:** Docker, GitHub Actions
 
 ---
+https://eps-dashboard.streamlit.app/
 *Készült: Kremzner Gábor - 2026*
