@@ -11,3 +11,9 @@ data/**/*.xlsx
 data/**/*.db
 logs/*.log
 
+# Dokumentumok és szemét
+*.pdf
+docs/*.pdf
+temp/
+
+
