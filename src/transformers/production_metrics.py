@@ -53,11 +53,15 @@ class MetricsCalculator:
         
         with get_db() as db:
             # --- 1. ADATGYŰJTÉS ---
+            from datetime import datetime
+            start_dt = datetime.combine(target_date, datetime.min.time())
+            end_dt = datetime.combine(target_date, datetime.max.time())
             
             # Minden esemény az adott napon
             events = db.query(ProductionEventDB).filter(
                 ProductionEventDB.machine_id == machine_id,
-                func.date(ProductionEventDB.timestamp) == target_date
+                ProductionEventDB.timestamp >= start_dt,
+                ProductionEventDB.timestamp <= end_dt
             ).all()
             
             # Tervezési adatok (napi célok)
@@ -128,7 +132,8 @@ class MetricsCalculator:
             
             quality_measurements = db.query(QualityDataDB).filter(
                 QualityDataDB.machine_id == machine_id,
-                func.date(QualityDataDB.timestamp) == target_date
+                QualityDataDB.timestamp >= start_dt,
+                QualityDataDB.timestamp <= end_dt
             ).all()
             
             avg_moisture = sum(q.moisture_pct for q in quality_measurements) / len(quality_measurements) if quality_measurements else 0.0

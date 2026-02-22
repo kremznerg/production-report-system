@@ -53,7 +53,7 @@ def get_daily_data(machine_id: str, target_date: date) -> Tuple[List[ProductionE
             ProductionEventDB.machine_id == machine_id,
             ProductionEventDB.timestamp >= start_dt,
             ProductionEventDB.timestamp <= end_dt
-        ).all()
+        ).order_by(ProductionEventDB.timestamp).all()
         events = [ProductionEvent.model_validate(e) for e in db_events]
         
         # 2. KPI ÖSSZEFOGLALÓ LEKÉRÉSE
