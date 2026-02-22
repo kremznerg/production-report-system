@@ -53,8 +53,7 @@ class EventsExtractor:
     
     def __init__(self) -> None:
         """Adatbázis kapcsolat inicializálása a konfiguráció alapján."""
-        source_db_path = settings.DATA_DIR / "source_events.db"
-        self.engine = create_engine(f"sqlite:///{source_db_path}")
+        self.engine = create_engine(settings.MES_DATABASE_URL)
         self.Session = sessionmaker(bind=self.engine)
     
     def fetch_events(self, machine_id: str, target_date: date) -> List[ProductionEvent]:
@@ -128,14 +127,17 @@ class EventsExtractor:
                 SourceEvent.machine_id == machine_id
             ).distinct().all()
             
-            # String dátumok visszaalakítása date objektumokká
+            # Konvertálás date objektumokká (Postgres date objektumot, SQLite string-et ad vissza)
             result = []
             for d in dates:
                 if d[0]:
-                    try:
-                        result.append(datetime.strptime(d[0], '%Y-%m-%d').date())
-                    except ValueError:
-                        continue
+                    if isinstance(d[0], date):
+                        result.append(d[0])
+                    elif isinstance(d[0], str):
+                        try:
+                            result.append(datetime.strptime(d[0], '%Y-%m-%d').date())
+                        except ValueError:
+                            continue
             
             return sorted(result)
             

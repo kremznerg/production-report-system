@@ -10,7 +10,7 @@ Két technológiát használunk:
 from datetime import datetime, date
 from typing import Optional
 from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, relationship
 from pydantic import BaseModel, ConfigDict
 
 # --- ADATBÁZIS MODELLEK (SQLALCHEMY) ---
@@ -29,6 +29,13 @@ class MachineDB(Base):
     id = Column(String(20), primary_key=True)
     name = Column(String(100), nullable=False)
     location = Column(String(100)) # Üzemegység helyszíne
+    
+    # --- KAPCSOLATOK (Relationships) ---
+    production_events = relationship("ProductionEventDB", back_populates="machine")
+    production_plans = relationship("ProductionPlanDB", back_populates="machine")
+    quality_data = relationship("QualityDataDB", back_populates="machine")
+    utilities = relationship("UtilityConsumptionDB", back_populates="machine")
+    daily_summaries = relationship("DailySummaryDB", back_populates="machine")
 
 class ArticleDB(Base):
     """
@@ -42,6 +49,11 @@ class ArticleDB(Base):
     name = Column(String(100), nullable=False)
     product_group = Column(String(50)) # Termékcsoport (pl. Liner, Medium)
     nominal_gsm = Column(Float)        # Névleges négyzetmétersúly (g/m2)
+    
+    # --- KAPCSOLATOK (Relationships) ---
+    production_events = relationship("ProductionEventDB", back_populates="article")
+    production_plans = relationship("ProductionPlanDB", back_populates="article")
+    quality_data = relationship("QualityDataDB", back_populates="article")
 
 class ProductionEventDB(Base):
     """
@@ -67,6 +79,10 @@ class ProductionEventDB(Base):
     article_id = Column(String(50), ForeignKey("articles.id"))
     
     description = Column(String(255)) # Megjegyzés (pl. állás oka)
+    
+    # --- KAPCSOLATOK (Relationships) ---
+    machine = relationship("MachineDB", back_populates="production_events")
+    article = relationship("ArticleDB", back_populates="production_events")
 
 class ProductionPlanDB(Base):
     """
@@ -83,6 +99,10 @@ class ProductionPlanDB(Base):
     target_quantity_tons = Column(Float) # Tervezett mennyiség (tonna)
     target_speed = Column(Float)         # Tervezett sebesség (m/min)
     
+    # --- KAPCSOLATOK (Relationships) ---
+    machine = relationship("MachineDB", back_populates="production_plans")
+    article = relationship("ArticleDB", back_populates="production_plans")
+    
 class QualityDataDB(Base):
     """
     Laboratóriumi minőségi mérések (Excel forrásból).
@@ -98,6 +118,10 @@ class QualityDataDB(Base):
     moisture_pct = Column(Float)  # Mért nedvességtartalom (%)
     gsm_measured = Column(Float)  # Mért négyzetmétersúly (g/m2)
     strength_knm = Column(Float)  # Mért szakítószilárdság (kNm)
+    
+    # --- KAPCSOLATOK (Relationships) ---
+    machine = relationship("MachineDB", back_populates="quality_data")
+    article = relationship("ArticleDB", back_populates="quality_data")
 
 class UtilityConsumptionDB(Base):
     """
@@ -115,6 +139,9 @@ class UtilityConsumptionDB(Base):
     steam_tons = Column(Float)       # Gőzfelhasználás (tonna)
     fiber_tons = Column(Float)       # Alapanyag (Rost/Recovered Paper) felvétel (tonna)
     additives_kg = Column(Float)     # Vegyszer/Adalékanyag felhasználás (kg)
+    
+    # --- KAPCSOLATOK (Relationships) ---
+    machine = relationship("MachineDB", back_populates="utilities")
 
 class DailySummaryDB(Base):
     """
@@ -155,6 +182,9 @@ class DailySummaryDB(Base):
     spec_water_m3_t = Column(Float)        # Fajlagos víz (m3/t)
     spec_steam_t_t = Column(Float)         # Fajlagos gőz (t/t)
     spec_fiber_t_t = Column(Float)         # Fajlagos rost (t/t)
+
+    # --- KAPCSOLATOK (Relationships) ---
+    machine = relationship("MachineDB", back_populates="daily_summaries")
 
 # --- VALIDÁTOR ÉS ADATÁTVITELI MODELLEK (PYDANTIC) ---
 

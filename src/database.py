@@ -16,10 +16,14 @@ from .models import Base
 
 # --- SQLALCHEMY ENGINE INICIALIZÁLÁSA ---
 # Az SQLite adatbázis szálkezelésének engedélyezése a check_same_thread=False kapcsolóval
+engine_kwargs = {}
+if settings.DATABASE_URL.startswith("sqlite"):
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+
 engine = create_engine(
     settings.DATABASE_URL,
-    echo=False,  # Állítsd True-ra a SQL lekérdezések nyomon követéséhez (Debugging)
-    connect_args={"check_same_thread": False}  
+    echo=False,
+    **engine_kwargs
 )
 
 # Adatbázis munkamenet gyár (Session Factory)

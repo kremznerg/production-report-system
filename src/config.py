@@ -26,13 +26,16 @@ class Settings(BaseSettings):
     DATA_DIR: Path = BASE_DIR / "data"
     
     # --- ADATBÁZIS ELÉRÉS ---
-    # SQLite adatfájl helye
-    DATABASE_URL: str = f"sqlite:///{DATA_DIR}/production.db"
+    DATABASE_URL: str = "sqlite:///./data/production.db"
+    MES_DATABASE_URL: str = "sqlite:///./data/source_events.db"
 
-    # --- KÜLSŐ FORRÁSOK (EXCEL) ---
-    PLANNING_FILE: Path = DATA_DIR / "planning.xlsx"
-    LAB_DATA_FILE: Path = DATA_DIR / "lab_data.xlsx"
-    UTILITIES_FILE: Path = DATA_DIR / "utilities.xlsx"
+    # Egy "hálózati meghajtót" szimulálunk, ahol évekre és hónapokra vannak bontva az Excel fájlok
+    NETWORK_SHARE_DIR: Path = DATA_DIR / "network_share"
+    
+    # Hálózati almappák
+    PLANNING_DIR: Path = NETWORK_SHARE_DIR / "planning"
+    LAB_DATA_DIR: Path = NETWORK_SHARE_DIR / "lab_data"
+    UTILITIES_DIR: Path = NETWORK_SHARE_DIR / "utilities"
 
     # Pydantic-specifikus konfiguráció
     model_config = SettingsConfigDict(

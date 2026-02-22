@@ -23,8 +23,8 @@ def test_pipeline_full_load_calls(pipeline):
     pipeline.run_full_load(target_date)
     
     pipeline._load_excel_data.assert_called_once()
-    pipeline._load_production_events.assert_called_with(target_date)
-    pipeline._update_daily_summaries.assert_called_with(target_date)
+    pipeline._load_production_events.assert_called_with(target_date, None)
+    pipeline._update_daily_summaries.assert_called_with(target_date, None)
 
 def test_get_active_machines(pipeline):
     """Teszteli az aktív gépek lekérését."""

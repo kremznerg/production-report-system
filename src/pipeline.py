@@ -35,9 +35,9 @@ class Pipeline:
         self.excel_reader = ExcelReader()
         self.metrics_calculator = MetricsCalculator()
     
-    def run_full_load(self, target_date: date) -> None:
+    def run_full_load(self, target_date: date, target_machine_id: Optional[str] = None) -> None:
         """
-        Lefuttatja a teljes betöltési ciklust egy adott napra.
+        Lefuttatja a teljes betöltési ciklust egy adott napra és (opcionálisan) gépre.
         Ez a folyamat törli a korábbi adatokat az adott napra (Upsert), 
         így bármikor újraindítható hiba nélkül.
         
@@ -48,18 +48,20 @@ class Pipeline:
         
         Args:
             target_date: A feldolgozandó dátum.
+            target_machine_id: (Opcionális) Ha meg van adva, csak ezt a gépet szinkronizálja.
         """
-        logger.info(f"🚀 ETL folyamat indítása: {target_date}")
+        machine_info = f" (Gép: {target_machine_id})" if target_machine_id else " (Minden gép)"
+        logger.info(f"🚀 ETL folyamat indítása: {target_date}{machine_info}")
         
         try:
             # 1. Excel alapú törzs- és mérési adatok betöltése
-            self._load_excel_data()
+            self._load_excel_data(target_date)
 
             # 2. Termelési események (MES) szinkronizálása
-            self._load_production_events(target_date)
+            self._load_production_events(target_date, target_machine_id)
 
             # 3. Napi KPI mutatók (Daily Summaries) generálása
-            self._update_daily_summaries(target_date)
+            self._update_daily_summaries(target_date, target_machine_id)
             
             logger.info(f"✅ ETL folyamat sikeresen befejeződött: {target_date}")
         except Exception as e:
@@ -72,14 +74,17 @@ class Pipeline:
             machines = db.query(MachineDB.id).all()
             return [m[0] for m in machines]
 
-    def _load_production_events(self, target_date: date) -> None:
+    def _load_production_events(self, target_date: date, target_machine_id: Optional[str] = None) -> None:
         """MES események kinyerése és betöltése a cél adatbázisba."""
         logger.info(f"Események betöltése... ({target_date})")
         
-        machines = self._get_active_machines()
-        if not machines:
-            logger.warning("Nincsenek aktív gépek az adatbázisban! Futtasd a seed_master_data.py-t.")
-            return
+        if target_machine_id:
+            machines = [target_machine_id]
+        else:
+            machines = self._get_active_machines()
+            if not machines:
+                logger.warning("Nincsenek aktív gépek az adatbázisban! Futtasd a seed_master_data.py-t.")
+                return
 
         for machine_id in machines:
             events = self.events_extractor.fetch_events(machine_id, target_date)
@@ -117,21 +122,21 @@ class Pipeline:
             
             logger.info(f"Eseménynapló frissítve: {machine_id} | {target_date}")
     
-    def _load_excel_data(self) -> None:
-        """Az összes Excel típusú forrásfájl beolvasása és mentése."""
+    def _load_excel_data(self, target_date: date) -> None:
+        """Az összes Excel típusú forrásfájl beolvasása és mentése az adott napra."""
         
         # 1. Termelési tervek
-        plans = self.excel_reader.read_planning()
+        plans = self.excel_reader.read_planning(target_date)
         if plans:
             self._save_plans(plans)
         
         # 2. Labor mérések
-        lab_data = self.excel_reader.read_lab_data()
+        lab_data = self.excel_reader.read_lab_data(target_date)
         if lab_data:
             self._save_quality(lab_data)
         
         # 3. Közmű fogyasztás
-        utilities = self.excel_reader.read_utilities()
+        utilities = self.excel_reader.read_utilities(target_date)
         if utilities:
             self._save_utilities(utilities)
     
@@ -190,9 +195,9 @@ class Pipeline:
                 db.add(UtilityConsumptionDB(**util))
             logger.info(f"Közműadatok (Utilities) szinkronizálva: {len(utilities)} rekord")
 
-    def _update_daily_summaries(self, target_date: date) -> None:
+    def _update_daily_summaries(self, target_date: date, target_machine_id: Optional[str] = None) -> None:
         """KPI mutatók újraszámolása és mentése az összesítő táblába."""
-        machines = self._get_active_machines()
+        machines = [target_machine_id] if target_machine_id else self._get_active_machines()
         for machine_id in machines:
             summary = self.metrics_calculator.calculate_daily_metrics(machine_id, target_date)
             if summary:

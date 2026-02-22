@@ -1,10 +1,13 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .env
-.coverage
-# Adatfájlok (Engedélyezve a Streamlit Cloud demóhoz)
-# *.db
-# *.xlsx
-logs/
-.pytest_cache/
 .DS_Store
+.vscode/
+.pytest_cache/
+
+# Adatfájlok és logok
+# Az Excel és adatbázis fájlokat nem commitoljuk, de a mappákat igen
+data/**/*.xlsx
+data/**/*.db
+logs/*.log
+

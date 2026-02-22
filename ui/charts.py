@@ -23,7 +23,13 @@ def render_sparkline(values, color="#0d6efd"):
         color: A vonal színe (hex kód).
     """
     if not values or len(values) < 2:
-        return None
+        fig = go.Figure()
+        fig.update_layout(
+            height=40, margin=dict(t=5, b=5, l=0, r=0),
+            xaxis=dict(visible=False), yaxis=dict(visible=False),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+        )
+        return fig
         
     fig = px.line(y=values, template="plotly_white")
     fig.update_traces(line=dict(color=color, width=3), hoverinfo="skip")

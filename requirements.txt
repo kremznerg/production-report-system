@@ -9,3 +9,4 @@ reportlab
 pytest
 plotly
 watchdog
+psycopg2-binary

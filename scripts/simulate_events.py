@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import random
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
@@ -52,21 +52,25 @@ STOP_REASONS = [
     "Érzékelő tisztítás", "Hengercsere", "Szárító beállítás"
 ]
 
-PLANNING_DATA = None
+PLANNING_DATA = {}
 
 def get_day_planning(target_date, machine_id):
     """Lekéri az adott napra vonatkozó terveket az Excel fájlból."""
     global PLANNING_DATA
-    if PLANNING_DATA is None:
-        planning_file = settings.PLANNING_FILE
+    year = target_date.year
+    
+    if year not in PLANNING_DATA:
+        planning_file = settings.PLANNING_DIR / f"planning_{year}.xlsx"
         if planning_file.exists():
-            PLANNING_DATA = pd.read_excel(planning_file)
+            PLANNING_DATA[year] = pd.concat(pd.read_excel(planning_file, sheet_name=None), ignore_index=True)
         else:
             return None
+            
+    df = PLANNING_DATA[year]
     
-    day_plan = PLANNING_DATA[
-        (PLANNING_DATA['Date'].dt.date == target_date) & 
-        (PLANNING_DATA['Machine'] == machine_id)
+    day_plan = df[
+        (df['Date'].dt.date == target_date) & 
+        (df['Machine'] == machine_id)
     ]
     return day_plan
 
@@ -78,17 +82,17 @@ def generate_events_for_day(target_date, machine_id):
 
     day_plan = get_day_planning(target_date, machine_id)
     if day_plan is not None and not day_plan.empty:
-        target_tons = day_plan['Target_Tons'].sum()
+        target_tons = float(day_plan['Target_Tons'].sum())
         planned_articles = day_plan['Article'].tolist()
     else:
-        target_tons = random.uniform(100, 150)
+        target_tons = float(random.uniform(100, 150))
         planned_articles = [random.choice(ARTICLES)]
     
     current_article = planned_articles[0]
     
     # Súly kalkuláció skálázása a napi célhoz (approx. 88% uptime-al számolva)
     estimated_run_intervals = (24 * 60 / EVENT_INTERVAL_MINUTES) * 0.88
-    base_weight_per_interval = (target_tons * 1000) / estimated_run_intervals
+    base_weight_per_interval = float((target_tons * 1000) / estimated_run_intervals)
     
     while current_time < end_time:
         rand = random.random()
@@ -152,17 +156,16 @@ def main():
     print("\n🏭 EcoPaper Solutions - MES Esemény Szimulátor")
     print("-" * 50)
     
-    source_db_path = settings.DATA_DIR / "source_events.db"
-    if source_db_path.exists():
-        print(f"🗑️  Régi forrás DB törlése: {source_db_path}")
-        os.remove(source_db_path)
+    print(f"🔗 Kapcsolódás a forrás (MES) szerverhez: {settings.MES_DATABASE_URL}")
+    source_engine = create_engine(settings.MES_DATABASE_URL)
     
-    source_engine = create_engine(f"sqlite:///{source_db_path}")
+    # Adatbázis resetelése (törlés és újraépítés)
+    SourceBase.metadata.drop_all(bind=source_engine)
     SourceBase.metadata.create_all(bind=source_engine)
     SourceSession = sessionmaker(bind=source_engine)
     
     end_date = datetime.now().date()
-    start_date = end_date - timedelta(days=30)
+    start_date = date(2025, 1, 1)
     
     all_events = []
     current_date = start_date
@@ -179,7 +182,7 @@ def main():
     finally:
         session.close()
     
-    print(f"✅ Kész! Forrás adatok mentve ide: {source_db_path}")
+    print(f"✅ Kész! Forrás adatok mentve a MES SQL szerverre.")
     print("-" * 50 + "\n")
 
 if __name__ == "__main__":

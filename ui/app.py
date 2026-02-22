@@ -86,7 +86,7 @@ def render_sidebar():
         )
             
         # Adat szinkronizáció (ETL indítása)
-        if st.button("Adatok szinkronizálása", width="stretch"):
+        if st.button("Napi adatok szinkronizálása", width="stretch", help="Tipp: A szinkronizáció többször is lefuttatható egy nap, a meglévő adatok felülíródnak."):
             with st.spinner(f"Szinkronizálás folyamatban ({selected_date})..."):
                 try:
                     pipeline = Pipeline()
@@ -156,7 +156,7 @@ def main():
     trend_summaries = get_trend_data(selected_machine_id, selected_date)
     
     if not events:
-        st.info("Ezen a napon nem található adat. töltsd be az adatokat az 'Adatok szinkronizálása' gombbal.")
+        st.info("Ezen a napon nem található adat. töltsd be az adatokat a 'Napi adatok szinkronizálása' gombbal.")
         return
 
     # --- 1. KPI SZEKCIÓ (FŐ MUTATÓK ÉS KÖZMŰVEK) ---
@@ -173,7 +173,7 @@ def main():
             st.metric("TERMELÉS", f"{summary.total_tons:.1f} t", 
                     delta=f"{prod_delta:.1f} %" if summary.target_tons > 0 else None,
                     help="A gép által termelt összes papír súlya (tonna).")
-            st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline([s.total_tons for s in trend_summaries], "#2ecc71"), width="stretch", config={'displayModeBar': False}, key="spark_prod")
         
         # KPI 2: OEE (Efficiency)
         with col2:
@@ -183,13 +183,13 @@ def main():
                          f"R = Rendelkezésre állás\n"
                          f"T = Teljesítmény index\n"
                          f"M = Minőségi mutató")
-            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline([s.oee_pct for s in trend_summaries], "#3498db"), width="stretch", config={'displayModeBar': False}, key="spark_oee")
         
         # KPI 3: Rendelkezésre állás
         with col3:
             st.metric("RENDELKEZÉSRE ÁLLÁS", f"{summary.availability_pct:.1f} %",
                     help="A gép üzemidejének aránya a teljes naptári időhöz képest.")
-            st.plotly_chart(render_sparkline([s.availability_pct for s in trend_summaries], "#9b59b6"), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline([s.availability_pct for s in trend_summaries], "#9b59b6"), width="stretch", config={'displayModeBar': False}, key="spark_avail")
         
         # KPI 4: Selejtarány
         with col4:
@@ -197,11 +197,11 @@ def main():
             st.metric("SELEJTARÁNY", f"{scrap_rate:.1f} %",
                     help="A nem megfelelő minőségű termelés aránya az összes termeléshez képest.")
             trend_scraps = [(s.scrap_tons / s.total_tons * 100) if s.total_tons > 0 else 0 for s in trend_summaries]
-            st.plotly_chart(render_sparkline(trend_scraps, "#e74c3c"), width="stretch", config={'displayModeBar': False})
+            st.plotly_chart(render_sparkline(trend_scraps, "#e74c3c"), width="stretch", config={'displayModeBar': False}, key="spark_scrap")
 
         # --- ERŐFORRÁS SZEKCIÓ ---
         u1, u2 = st.columns([0.05, 0.95])
-        with u1: st.image("assets/oee.png", width=64) # Javítva: oee.png helyett power.png-nek kéne lennie, de a design szerint maradjon konzisztens
+        with u1: st.image("assets/power.png", width=64)
         with u2: st.subheader("Fajlagos erőforrás-felhasználás")
 
         u_col1, u_col2, u_col3, u_col4 = st.columns(4)

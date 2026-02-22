@@ -2,7 +2,7 @@
 """
 MINTA ADAT GENERÁTOR (EXCEL)
 ============================
-Létrehozza a teszteléshez szükséges Excel fájlokat (planning, lab_data, utilities).
+Létrehozza a teszteléshez szükséges Excel fájlokat havi bontásban (planning, lab_data, utilities).
 Realistiches, ipari adatokkal tölti fel a rendszert a demózáshoz.
 """
 
@@ -20,44 +20,76 @@ sys.path.insert(0, str(project_root))
 
 from src.config import settings
 
-def create_planning_data() -> None:
-    """Termelési terv (planning.xlsx) létrehozása 30 napra."""
+def save_by_year_month(df: pd.DataFrame, prefix: str, date_col: str, out_dir: Path):
+    """
+    Kimenti a DataFramet fájlokba év szerinti bontásban, fülönkénti (sheet) hónapokkal, mappa struktúrában.
+    pl. network_share/lab_data/2026.xlsx, sheet: 02
+    """
+    # Mappa létrehozása a típusnak megfelelően
+    out_dir.mkdir(parents=True, exist_ok=True)
     
-    print("📋 Terv (planning.xlsx) generálása...")
+    df['Year'] = pd.to_datetime(df[date_col]).dt.year
+    df['Month'] = pd.to_datetime(df[date_col]).dt.strftime('%m')
+    
+    for year, year_df in df.groupby('Year'):
+        file_path = out_dir / f"{prefix}_{year}.xlsx"
+        
+        # Ha létezik a fájl, meg kell tartani a korábbi füleket (amit most nem írunk felül)
+        existing_sheets = {}
+        if file_path.exists():
+            with pd.ExcelFile(file_path) as xls:
+                for sheet_name in xls.sheet_names:
+                    existing_sheets[sheet_name] = pd.read_excel(xls, sheet_name=sheet_name)
+                    
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            for month, month_df in year_df.groupby('Month'):
+                # Töröljük a temp oszlopokat
+                out_df = month_df.drop(columns=['Year', 'Month'])
+                out_df.to_excel(writer, sheet_name=month, index=False)
+                existing_sheets[month] = out_df  # frissítjük az éppen írt füllel
+                
+            # Visszaírjuk azokat a lapokat is, mik nem frissültek (pl. korábbi hónapok)
+            for sheet_name, sheet_df in existing_sheets.items():
+                if sheet_name not in year_df['Month'].unique():
+                    try:
+                        sheet_df.drop(columns=['Year', 'Month'], inplace=True, errors='ignore')
+                    except Exception:
+                        pass
+                    sheet_df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    df.drop(columns=['Year', 'Month'], inplace=True)
+    print(f"✅ Kész as hálózati mappában (év/hónap bontás): {prefix}")
+
+def create_planning_data() -> None:
+    print("📋 Terv (planning) generálása...")
     
     data: Dict[str, List[Any]] = {
-        'Date': [],
-        'Machine': [],
-        'Article': [],
-        'Target_Speed': [],
-        'Target_Tons': []
+        'Date': [], 'Machine': [], 'Article': [], 'Target_Speed': [], 'Target_Tons': []
     }
     
     end_date: date = date.today()
-    start_date: date = end_date - timedelta(days=30)
+    start_date: date = date(2025, 1, 1)
     machines: List[str] = ['PM1', 'PM2']
     
-    # Termék specifikációk - reális sebesség és tonna célok
     article_specs: Dict[str, Dict[str, float]] = {
-        'KL_150':   {'speed': 850,  'tons': 600},  
-        'KL_175':   {'speed': 800,  'tons': 620},  
-        'TL_100':   {'speed': 1100, 'tons': 1200}, 
-        'TL_140':   {'speed': 1000, 'tons': 1300}, 
-        'WTL_120':  {'speed': 1050, 'tons': 1250}, 
-        'FL_90':    {'speed': 1200, 'tons': 1100}, 
+        'KL_150': {'speed': 850,  'tons': 600},  
+        'KL_175': {'speed': 800,  'tons': 620},  
+        'TL_100': {'speed': 1100, 'tons': 1200}, 
+        'TL_140': {'speed': 1000, 'tons': 1300}, 
+        'WTL_120':{'speed': 1050, 'tons': 1250}, 
+        'FL_90':  {'speed': 1200, 'tons': 1100}, 
     }
     articles = list(article_specs.keys())
     
-    for day in range(31):
+    num_days = (end_date - start_date).days + 1
+    for day in range(num_days):
         current_date: date = start_date + timedelta(days=day)
         for machine in machines:
-            # Naponta 2-4 különböző termék gyártása gépnélként
             num_articles = random.randint(2, 4)
             chosen_articles = random.sample(articles, num_articles)
             
             for i, article in enumerate(chosen_articles):
                 specs = article_specs[article]
-                # Kapacitás skálázás (PM2 nagyobb gép, mint a PM1)
                 capacity = 0.95 if machine == 'PM1' else 1.05
                 
                 target_speed = round(specs['speed'] * capacity, 0)
@@ -70,89 +102,76 @@ def create_planning_data() -> None:
                 data['Target_Tons'].append(target_tons)
     
     df = pd.DataFrame(data)
-    file_path = settings.PLANNING_FILE
-    df.to_excel(file_path, index=False)
-    print(f"✅ Kész: {file_path} ({len(df)} sor)")
+    save_by_year_month(df, 'planning', 'Date', settings.PLANNING_DIR)
 
 def create_lab_data() -> None:
-    """Minőségi mérések (lab_data.xlsx) létrehozása 30 napra."""
-    
-    print("🔬 Minőségi adatok (lab_data.xlsx) generálása...")
+    print("🔬 Minőségi adatok (lab_data) generálása...")
     
     data: Dict[str, List[Any]] = {
-        'Timestamp': [],
-        'Machine': [],
-        'Article': [],
-        'Moisture_%': [],
-        'GSM': [],
-        'Strength_kNm': []
+        'Timestamp': [], 'Machine': [], 'Article': [], 'Moisture_%': [], 'GSM': [], 'Strength_kNm': []
     }
     
     end_date = date.today()
-    start_date_val = end_date - timedelta(days=30)
+    start_date_val = date(2025, 1, 1)
     start_date = datetime.combine(start_date_val, datetime.min.time())
     machines = ['PM1', 'PM2']
     
-    # Cél minőségi paraméterek
     article_quality = {
-        'KL_150':   {'gsm': 150, 'moisture': 6.5, 'strength': 5.5}, 
-        'KL_175':   {'gsm': 175, 'moisture': 6.3, 'strength': 6.0}, 
-        'TL_100':   {'gsm': 100, 'moisture': 7.5, 'strength': 4.0}, 
-        'TL_140':   {'gsm': 140, 'moisture': 7.2, 'strength': 4.5}, 
-        'WTL_120':  {'gsm': 120, 'moisture': 7.0, 'strength': 4.2}, 
-        'FL_90':    {'gsm': 90,  'moisture': 7.8, 'strength': 3.5}, 
+        'KL_150': {'gsm': 150, 'moisture': 6.5, 'strength': 5.5}, 
+        'KL_175': {'gsm': 175, 'moisture': 6.3, 'strength': 6.0}, 
+        'TL_100': {'gsm': 100, 'moisture': 7.5, 'strength': 4.0}, 
+        'TL_140': {'gsm': 140, 'moisture': 7.2, 'strength': 4.5}, 
+        'WTL_120':{'gsm': 120, 'moisture': 7.0, 'strength': 4.2}, 
+        'FL_90':  {'gsm': 90,  'moisture': 7.8, 'strength': 3.5}, 
     }
     
     from sqlalchemy import create_engine, text
-    source_db_path = settings.DATA_DIR / "source_events.db"
-    engine = create_engine(f"sqlite:///{source_db_path}")
+    engine = create_engine(settings.MES_DATABASE_URL)
     
-    for day in range(31):
+    with engine.connect() as conn:
+        q = text("SELECT machine_id, article_id, timestamp FROM events WHERE event_type='RUN'")
+        events_df = pd.read_sql(q, conn)
+    
+    events_df['timestamp'] = pd.to_datetime(events_df['timestamp'])
+    events_df.sort_values('timestamp', inplace=True)
+    
+    num_days = (end_date - start_date_val).days + 1
+    for day in range(num_days):
         for machine in machines:
-            # 2 óránkénti labor mérések
+            machine_events = events_df[events_df['machine_id'] == machine]
+            
             for hour in range(0, 24, 2):
-                minute_offset = random.randint(0, 10)
-                timestamp = start_date + timedelta(days=day, hours=hour, minutes=minute_offset)
+                timestamp = start_date + timedelta(days=day, hours=hour, minutes=random.randint(0, 10))
                 
-                # Valós gyártás lekérése a szimulált eseményekből
-                with engine.connect() as conn:
-                    query = text("SELECT article_id FROM events WHERE machine_id = :m AND timestamp <= :t ORDER BY timestamp DESC LIMIT 1")
-                    res = conn.execute(query, {"m": machine, "t": timestamp}).scalar()
-                    article = res if res else random.choice(list(article_quality.keys()))
+                # Találjuk meg a legutóbbi terméket
+                past_events = machine_events[machine_events['timestamp'] <= timestamp]
+                if not past_events.empty:
+                    article = past_events.iloc[-1]['article_id']
+                else:
+                    article = random.choice(list(article_quality.keys()))
                 
                 specs = article_quality.get(article, article_quality['TL_100'])
-                
-                # Reális mérési szórás (variáció) hozzáadása
-                gsm = round(specs['gsm'] * random.uniform(0.97, 1.03), 1)
-                moisture = round(specs['moisture'] * random.uniform(0.95, 1.05), 1)
-                strength = round(specs['strength'] * random.uniform(0.95, 1.05), 1)
                 
                 data['Timestamp'].append(timestamp)
                 data['Machine'].append(machine)
                 data['Article'].append(article)
-                data['Moisture_%'].append(moisture)
-                data['GSM'].append(gsm)
-                data['Strength_kNm'].append(strength)
+                data['Moisture_%'].append(round(specs['moisture'] * random.uniform(0.95, 1.05), 1))
+                data['GSM'].append(round(specs['gsm'] * random.uniform(0.97, 1.03), 1))
+                data['Strength_kNm'].append(round(specs['strength'] * random.uniform(0.95, 1.05), 1))
     
     df = pd.DataFrame(data).sort_values('Timestamp')
-    file_path = settings.LAB_DATA_FILE
-    df.to_excel(file_path, index=False)
-    print(f"✅ Kész: {file_path} ({len(df)} rekord)")
+    save_by_year_month(df, 'lab_data', 'Timestamp', settings.LAB_DATA_DIR)
 
 def create_utilities_data() -> None:
-    """Közműfogyasztás (utilities.xlsx) létrehozása a termelés alapján."""
+    print("⚡ Közműadatok (utilities) generálása...")
     
-    print("⚡ Közműadatok (utilities.xlsx) generálása...")
-    
-    planning_file = settings.PLANNING_FILE
-    if not planning_file.exists():
-        create_planning_data()
-    
-    df_plan = pd.read_excel(planning_file)
+    # Közmű generáláshoz előbb tervezés adataiból szedjük a dátumokat - a legegyszerűbb futtatni a readert
+    # vagy csak ugyanazokat generáljuk mint eddig.
+    end_date: date = date.today()
+    start_date: date = date(2025, 1, 1)
     
     from sqlalchemy import create_engine, text
-    source_db_path = settings.DATA_DIR / "source_events.db"
-    engine = create_engine(f"sqlite:///{source_db_path}")
+    engine = create_engine(settings.MES_DATABASE_URL)
     
     data: Dict[str, List[Any]] = {
         'Date': [], 'Machine': [], 'Water_m3': [], 
@@ -160,67 +179,52 @@ def create_utilities_data() -> None:
         'Fiber_tons': [], 'Additives_kg': []
     }
     
-    # Ipari fogyasztási benchmarkok gépenként
     targets = {
         'PM1': {'elec': 343.93, 'fiber_kg': 1095.0, 'steam': 4.39, 'water': 7.46},
         'PM2': {'elec': 367.00, 'fiber_kg': 1090.0, 'steam': 3.68, 'water': 7.10}
     }
-    
-    for _, row in df_plan.iterrows():
-        machine = row['Machine']
-        target_date = row['Date']
-        
-        # Tényleges termelés lekérése a szimulált eseményekből
-        with engine.connect() as conn:
-            query = text("SELECT SUM(weight_kg) FROM events WHERE machine_id = :m AND date(timestamp) = :d")
-            res = conn.execute(query, {"m": machine, "d": target_date.strftime('%Y-%m-%d')}).scalar()
-            actual_tons = (res / 1000.0) if res else row['Target_Tons']
-        
-        t_data = targets.get(machine, targets['PM1'])
-        
-        # Fogyasztási adatok skálázása a termelt tonnához
-        fiber = round(actual_tons * (t_data['fiber_kg'] / 1000) * random.uniform(1.01, 1.03), 2)
-        water = round(actual_tons * t_data['water'] * random.uniform(0.95, 1.05), 1)
-        electricity = round(actual_tons * t_data['elec'] * random.uniform(0.98, 1.02), 0)
-        steam = round(actual_tons * t_data['steam'] * random.uniform(0.97, 1.03), 2)
-        additives = round(actual_tons * random.uniform(10, 15), 1)
-        
-        data['Date'].append(row['Date'])
-        data['Machine'].append(machine)
-        data['Water_m3'].append(water)
-        data['Electricity_kWh'].append(electricity)
-        data['Steam_tons'].append(steam)
-        data['Fiber_tons'].append(fiber)
-        data['Additives_kg'].append(additives)
+
+    num_days = (end_date - start_date).days + 1
+    for day in range(num_days):
+        current_date: date = start_date + timedelta(days=day)
+        for machine in ['PM1', 'PM2']:
+            with engine.connect() as conn:
+                query = text("SELECT SUM(weight_kg) FROM events WHERE machine_id = :m AND date(timestamp) = :d")
+                res = conn.execute(query, {"m": machine, "d": current_date.strftime('%Y-%m-%d')}).scalar()
+                actual_tons = (res / 1000.0) if res else random.uniform(500, 1000)
+            
+            t_data = targets.get(machine, targets['PM1'])
+            
+            data['Date'].append(current_date)
+            data['Machine'].append(machine)
+            data['Water_m3'].append(round(actual_tons * t_data['water'] * random.uniform(0.95, 1.05), 1))
+            data['Electricity_kWh'].append(round(actual_tons * t_data['elec'] * random.uniform(0.98, 1.02), 0))
+            data['Steam_tons'].append(round(actual_tons * t_data['steam'] * random.uniform(0.97, 1.03), 2))
+            data['Fiber_tons'].append(round(actual_tons * (t_data['fiber_kg'] / 1000) * random.uniform(1.01, 1.03), 2))
+            data['Additives_kg'].append(round(actual_tons * random.uniform(10, 15), 1))
     
     df = pd.DataFrame(data)
-    file_path = settings.UTILITIES_FILE
-    df.to_excel(file_path, index=False)
-    print(f"✅ Kész: {file_path} ({len(df)} nap)")
+    save_by_year_month(df, 'utilities', 'Date', settings.UTILITIES_DIR)
 
 def main():
-    """Összes minta fájl generálása egy lépésben."""
     settings.DATA_DIR.mkdir(exist_ok=True)
+    settings.NETWORK_SHARE_DIR.mkdir(parents=True, exist_ok=True)
     
-    print("\n🏗️  EcoPaper Solutions - Minta Adat Generáló")
+    print("\n🏗️ EcoPaper Solutions - Minta Adat Generáló")
     print("-" * 50)
     
-    # 1. Terv generálása
     create_planning_data()
     
-    # 2. Események szimulálása (Ez az alapja a többinek)
+    # 2. Események szimulálása
     print("\n🔄 Termelési folyamat szimulálása (MES events)...")
     import subprocess
     subprocess.run(["python3", "scripts/simulate_events.py"], check=True)
     
-    # 3. Labor és Közmű adatok generálása (a szimulált termeléshez igazítva)
-    print("\n🧪 Labor és fogyasztási adatok szinkronizálása...")
     create_lab_data()
     create_utilities_data()
     
     print("-" * 50)
-    print("✅ Összes minta fájl sikeresen létrehozva a data/ mappában!")
-    print("🚀 Most már futtathatod az ETL pipeline-t:\n   python scripts/run_pipeline.py\n")
+    print("✅ Összes minta fájl sikeresen létrehozva a data/network_share/ mappában!")
 
 if __name__ == "__main__":
     main()
