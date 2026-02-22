@@ -44,6 +44,16 @@ services:
       - mes_db
     restart: always
 
+  adminer:
+    image: adminer
+    container_name: production_adminer
+    ports:
+      - "8080:8080"
+    restart: always
+    depends_on:
+      - db
+      - mes_db
+
 volumes:
   postgres_data:
   mes_postgres_data:
