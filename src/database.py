@@ -36,7 +36,7 @@ def init_db() -> None:
     Ha a táblák már léteznek, nem történik változás.
     """
     Base.metadata.create_all(bind=engine)
-    print(f"✅ Adatbázis sémák inicializálva: {settings.DATABASE_URL}")
+    print(f"Adatbázis sémák inicializálva")
 
 @contextmanager
 def get_db() -> Generator[Session, None, None]:
@@ -55,12 +55,9 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
-        # Alapértelmezett commit a tranzakció végén
         db.commit()
     except Exception as e:
-        # Hiba esetén azonnali visszagörgetés az adatkonzisztencia megőrzése érdekében
         db.rollback()
         raise e
     finally:
-        # Kapcsolat lezárása a memóriaszivárgás elkerülésére
         db.close()

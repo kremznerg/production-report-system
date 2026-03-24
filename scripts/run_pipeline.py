@@ -3,7 +3,7 @@
 ETL PIPELINE INDÍTÓ
 ====================
 Ez a script felelős az adatok beolvasásáért, transzformálásáért és betöltéséért (ETL).
-Végigmegy az elmúlt 30 napon, és minden napra lefuttatja a teljes szinkronizációt.
+Végigmegy a teljes mintatartományon, és minden napra lefuttatja a szinkronizációt.
 """
 
 import sys
@@ -18,23 +18,27 @@ from src.logging_config import setup_logging
 from src.config import settings
 from src.pipeline import Pipeline
 
-def main():
-    """Végrehajtja a ciklikus adatbetöltést az elmúlt 30 napra."""
+# --- KONSTANSOK ---
+END_DATE = date.today()
+START_DATE = END_DATE - timedelta(days=365)
+
+def main() -> None:
+    """Végrehajtja a ciklikus adatbetöltést a teljes mintatartományra."""
     
-    # Naplózás inicializálása (szintek: INFO, DEBUG, WARNING, ERROR)
+    # Naplózás inicializálása
     setup_logging(settings.LOG_LEVEL)
     
-    print("\n🔄 EcoPaper Solutions - ETL Pipeline Folyamat")
+    print("\nEcoPaper Solutions - ETL Pipeline Folyamat")
     print("-" * 60)
     
     # Pipeline példányosítása
     pipeline = Pipeline()
     
-    # Időszak meghatározása: elmúlt 30 nap visszamenőleg máig
-    end_date = date.today()
-    start_date = end_date - timedelta(days=30)
+    # Időszak meghatározása
+    start_date = START_DATE
+    end_date = END_DATE
     
-    print(f"📅 Időszak feldolgozása: {start_date} -> {end_date}")
+    print(f"Időszak feldolgozása: {start_date} -> {end_date}")
     
     # Ciklikus betöltés naponként
     current_date = start_date
@@ -43,8 +47,7 @@ def main():
         current_date += timedelta(days=1)
     
     print("-" * 60)
-    print(f"✅ Pipeline folyamat sikeresen befejeződött!")
-    print(f"ℹ️  Részletes napló a logs/app.log fájlban található.\n")
+    print(f"Pipeline folyamat sikeresen befejeződött!")
 
 if __name__ == "__main__":
     main()

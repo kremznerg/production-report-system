@@ -20,9 +20,10 @@ sys.path.insert(0, str(project_root))
 
 from src.config import settings
 
-SAMPLE_START_DATE: date = date.today() - timedelta(days=365)
-SAMPLE_END_DATE: date = date.today()
-NUM_DAYS: int = (SAMPLE_END_DATE - SAMPLE_START_DATE).days + 1
+# --- KONSTANSOK ---
+START_DATE = date.today() - timedelta(days=365)
+END_DATE = date.today()
+NUM_DAYS: int = (END_DATE - START_DATE).days
 MACHINES: List[str] = ['PM1', 'PM2']
 
 ARTICLE_SPECS: Dict[str, Dict[str, float]] = {
@@ -51,10 +52,7 @@ MACHINE_TARGETS: Dict[str, Dict[str, float]] = {
 engine = create_engine(settings.MES_DATABASE_URL)
 
 def save_by_year_month(df: pd.DataFrame, prefix: str, date_col: str, out_dir: Path) -> None:
-    """
-    Kimenti a DataFramet fájlokba év szerinti bontásban, laponként hónapokkal, mappa struktúrában.
-    pl. network_share/lab_data/lab_data_2026.xlsx, lap: 02
-    """
+    """Kimenti a DataFramet fájlokba év szerinti bontásban."""
     out_dir.mkdir(parents=True, exist_ok=True)
     
     df['Year'] = pd.to_datetime(df[date_col]).dt.year
@@ -75,13 +73,7 @@ def save_by_year_month(df: pd.DataFrame, prefix: str, date_col: str, out_dir: Pa
     print(f"A mintaadatok generálása sikeresen befejeződött: {prefix}")
 
 def create_planning_data() -> None:
-    """
-    Gyártási terv adatok szimulálása és generálása.
-    
-    Létrehoz egy fiktív gyártási tervet (célsebesség, célmennyiség) 2025. januártól máig,
-    amely papírgépekre (PM1, PM2) és cikkekre van lebontva, 
-    majd ezeket Excel fájlokba menti.
-    """
+    """Gyártási terv adatok generálása."""
     print("Terv adatok generálása...")
     
     data: Dict[str, List[Any]] = {
@@ -90,8 +82,8 @@ def create_planning_data() -> None:
     
     articles = list(ARTICLE_SPECS.keys())
     
-    for day in range(NUM_DAYS):
-        current_date: date = SAMPLE_START_DATE + timedelta(days=day)
+    for day in range(NUM_DAYS + 1):
+        current_date: date = START_DATE + timedelta(days=day)
         for machine in MACHINES:
             num_articles = random.randint(2, 4)
             chosen_articles = random.sample(articles, num_articles)
@@ -113,20 +105,14 @@ def create_planning_data() -> None:
     save_by_year_month(df, 'planning', 'Date', settings.PLANNING_DIR)
 
 def create_lab_data() -> None:
-    """
-    Laboratóriumi (minőségi) adatok szimulálása.
-    
-    Lekéri a tényleges termelési eseményeket az SQL adatbázisból, 
-    és azok alapján generál véletlenszerű labor-méréseket (nedvesség, súly, szakítás)
-    a megadott termék specifikációk alapján.
-    """
+    """Laboratóriumi adatok generálása."""
     print("Minőségi adatok (lab_data) generálása...")
     
     data: Dict[str, List[Any]] = {
         'Timestamp': [], 'Machine': [], 'Article': [], 'Moisture_%': [], 'GSM': [], 'Strength_kNm': []
     }
     
-    start_date = datetime.combine(SAMPLE_START_DATE, datetime.min.time())
+    start_dt = datetime.combine(START_DATE, datetime.min.time())
         
     with engine.connect() as conn:
         q = text("SELECT machine_id, article_id, timestamp FROM events WHERE event_type='RUN'")
@@ -135,12 +121,12 @@ def create_lab_data() -> None:
     events_df['timestamp'] = pd.to_datetime(events_df['timestamp'])
     events_df.sort_values('timestamp', inplace=True)
     
-    for day in range(NUM_DAYS):
+    for day in range(NUM_DAYS + 1):
         for machine in MACHINES:
             machine_events = events_df[events_df['machine_id'] == machine]
             
             for hour in range(0, 24, 2):
-                timestamp = start_date + timedelta(days=day, hours=hour, minutes=random.randint(0, 10))
+                timestamp = start_dt + timedelta(days=day, hours=hour, minutes=random.randint(0, 10))
                 past_events = machine_events[machine_events['timestamp'] <= timestamp]
                 if not past_events.empty:
                     article = past_events.iloc[-1]['article_id']
@@ -160,12 +146,7 @@ def create_lab_data() -> None:
     save_by_year_month(df, 'lab_data', 'Timestamp', settings.LAB_DATA_DIR)
 
 def create_utilities_data() -> None:
-    """
-    Közműfogyasztási adatok (víz, áram, gőz, alapanyag) szimulálása.
-    
-    A ténylegesen legyártott papírmennyiség (tonna) alapján számolja ki 
-    a fajlagos közműfogyasztást gépenként, némi véletlenszerű ingadozással.
-    """
+    """Közműfogyasztási adatok generálása."""
     print("Közműadatok (utilities) generálása...")
     
     data: Dict[str, List[Any]] = {
@@ -174,8 +155,8 @@ def create_utilities_data() -> None:
         'Fiber_tons': [], 'Additives_kg': []
     }
     
-    for day in range(NUM_DAYS):
-        current_date: date = SAMPLE_START_DATE + timedelta(days=day)
+    for day in range(NUM_DAYS + 1):
+        current_date: date = START_DATE + timedelta(days=day)
         for machine in MACHINES:
             with engine.connect() as conn:
                 query = text("SELECT SUM(weight_kg) FROM events WHERE machine_id = :m AND date(timestamp) = :d")
@@ -195,7 +176,7 @@ def create_utilities_data() -> None:
     df = pd.DataFrame(data)
     save_by_year_month(df, 'utilities', 'Date', settings.UTILITIES_DIR)
 
-def main():
+def main() -> None:
     settings.DATA_DIR.mkdir(exist_ok=True)
     settings.NETWORK_SHARE_DIR.mkdir(parents=True, exist_ok=True)
     

@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-TERMELÉSI ESEMÉNY SZIMULÁTOR
-============================
-Létrehoz egy külön SQLite adatbázist (source_events.db), amely a gyári MES rendszert szimulálja.
-Ez az alapvető forrása a termelési eseményeknek (RUN, STOP, BREAK).
-Realistiches 30 napos gyártási naplót generál.
+MES ESEMÉNY SZIMULÁTOR (Source System Simulator)
+================================================
+Létrehoz egy külön PostgreSQL adatbázist (mes_db), amely a gyári MES rendszert szimulálja.
+Ez az alapforrása a termelési eseményeknek (RUN, STOP, BREAK).
+Realisztikus gyártási naplót generál a teljes mintatartományra.
 """
 
 import sys
-import os
 from pathlib import Path
 import random
+from typing import List, Optional
 import pandas as pd
 from datetime import datetime, timedelta, date
-
+from functools import lru_cache
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
@@ -49,48 +49,49 @@ EVENT_INTERVAL_MINUTES = 15
 
 STOP_REASONS = [
     "Tervezett karbantartás", "Anyaghiány", "Műszaki hiba",
-    "Érzékelő tisztítás", "Hengercsere", "Szárító beállítás"
+    "Takarítás", "Kaparócsere", "Erőmű leállás", "Tekercsvágó hiba"
 ]
 
-PLANNING_DATA = {}
+# --- IDŐTARTAM BEÁLLÍTÁSOK ---
+START_DATE = date.today() - timedelta(days=365)
+END_DATE = date.today()
+NUM_DAYS = (END_DATE - START_DATE).days
 
-def get_day_planning(target_date, machine_id):
+@lru_cache(maxsize=None)
+def load_planning_data_for_year(year: int) -> Optional[pd.DataFrame]:
+    """Betölti és memóriában tartja az adott év tervezési adatait."""
+    planning_file = settings.PLANNING_DIR / f"planning_{year}.xlsx"
+    if planning_file.exists():
+        return pd.concat(pd.read_excel(planning_file, sheet_name=None), ignore_index=True)
+    return None
+
+def get_day_planning(target_date: date, machine_id: str) -> Optional[pd.DataFrame]:
     """Lekéri az adott napra vonatkozó terveket az Excel fájlból."""
-    global PLANNING_DATA
-    year = target_date.year
-    
-    if year not in PLANNING_DATA:
-        planning_file = settings.PLANNING_DIR / f"planning_{year}.xlsx"
-        if planning_file.exists():
-            PLANNING_DATA[year] = pd.concat(pd.read_excel(planning_file, sheet_name=None), ignore_index=True)
-        else:
-            return None
-            
-    df = PLANNING_DATA[year]
-    
+    df = load_planning_data_for_year(target_date.year)
+    if df is None:
+        return None
+        
     day_plan = df[
         (df['Date'].dt.date == target_date) & 
         (df['Machine'] == machine_id)
     ]
     return day_plan
 
-def generate_events_for_day(target_date, machine_id):
+def generate_events_for_day(target_date: date, machine_id: str) -> List[SourceEvent]:
     """Generálja egy nap 24 órájának termelési eseményeit."""
     events = []
     current_time = datetime.combine(target_date, datetime.min.time())
     end_time = current_time + timedelta(days=1)
 
     day_plan = get_day_planning(target_date, machine_id)
-    if day_plan is not None and not day_plan.empty:
-        target_tons = float(day_plan['Target_Tons'].sum())
-        planned_articles = day_plan['Article'].tolist()
-    else:
-        target_tons = float(random.uniform(100, 150))
-        planned_articles = [random.choice(ARTICLES)]
+    if day_plan is None or day_plan.empty:
+        raise ValueError(f"HIBA: Nincs gyártási terv a(z) {machine_id} géphez a mai napon ({target_date})!")
+
+    target_tons = float(day_plan['Target_Tons'].sum())
+    planned_articles = day_plan['Article'].tolist()
     
     current_article = planned_articles[0]
     
-    # Súly kalkuláció skálázása a napi célhoz (approx. 88% uptime-al számolva)
     estimated_run_intervals = (24 * 60 / EVENT_INTERVAL_MINUTES) * 0.88
     base_weight_per_interval = float((target_tons * 1000) / estimated_run_intervals)
     
@@ -98,7 +99,6 @@ def generate_events_for_day(target_date, machine_id):
         rand = random.random()
         
         if rand < 0.88:
-            # --- RUN (NORMÁL ÜZEM - 88%) ---
             duration = EVENT_INTERVAL_MINUTES * 60
             status = "GOOD" if random.random() < 0.95 else "SCRAP"
             base_speed = random.uniform(750, 900)
@@ -113,7 +113,6 @@ def generate_events_for_day(target_date, machine_id):
             current_time += timedelta(seconds=duration)
             
         elif rand < 0.92:
-            # --- STOP (TERVEZETT/MŰSZAKI ÁLLÁS - 4%) ---
             duration = random.randint(10, 45) * 60
             events.append(SourceEvent(
                 timestamp=current_time, duration_seconds=duration,
@@ -123,7 +122,6 @@ def generate_events_for_day(target_date, machine_id):
             current_time += timedelta(seconds=duration)
             
         else:
-            # --- BREAK (PAPÍRSZAKADÁS - 8%) ---
             duration = random.randint(5, 20) * 60
             events.append(SourceEvent(
                 timestamp=current_time, duration_seconds=duration,
@@ -132,18 +130,16 @@ def generate_events_for_day(target_date, machine_id):
             ))
             current_time += timedelta(seconds=duration)
             
-            # Szakadás után mindig van egy kis SCRAP termelés (újrabevezetés)
             if current_time < end_time:
                 duration = EVENT_INTERVAL_MINUTES * 60
                 events.append(SourceEvent(
                     timestamp=current_time, duration_seconds=duration,
                     event_type="RUN", status="SCRAP", weight_kg=round(random.uniform(200, 500), 1),
                     average_speed=round(random.uniform(400, 600), 1), machine_id=machine_id,
-                    article_id=current_article, description="Újraindulás szakadás után"
+                    article_id=current_article, description="Felvezetés szakadás után"
                 ))
                 current_time += timedelta(seconds=duration)
         
-        # Termék váltás a nap során a terv alapján
         if len(planned_articles) > 1:
             slice_hours = 24 / len(planned_articles)
             article_index = min(int(current_time.hour / slice_hours), len(planned_articles) - 1)
@@ -151,30 +147,27 @@ def generate_events_for_day(target_date, machine_id):
     
     return events
 
-def main():
+def main() -> None:
     """Forrás adatbázis (MES) inicializálása és feltöltése."""
-    print("\n🏭 EcoPaper Solutions - MES Esemény Szimulátor")
+    print("\nEcoPaper Solutions - MES Esemény Szimulátor")
     print("-" * 50)
     
-    print(f"🔗 Kapcsolódás a forrás (MES) szerverhez: {settings.MES_DATABASE_URL}")
+    print(f"Kapcsolódás a forrás (MES) szerverhez")
     source_engine = create_engine(settings.MES_DATABASE_URL)
     
-    # Adatbázis resetelése (törlés és újraépítés)
+    # Adatbázis resetelése
     SourceBase.metadata.drop_all(bind=source_engine)
     SourceBase.metadata.create_all(bind=source_engine)
     SourceSession = sessionmaker(bind=source_engine)
     
-    end_date = datetime.now().date()
-    start_date = date(2025, 1, 1)
-    
     all_events = []
-    current_date = start_date
-    while current_date <= end_date:
+    current_date = START_DATE
+    while current_date <= END_DATE:
         for machine_id in MACHINES:
             all_events.extend(generate_events_for_day(current_date, machine_id))
         current_date += timedelta(days=1)
     
-    print(f"🔄 {len(all_events)} esemény mentése folyamatban...")
+    print(f"{len(all_events)} esemény mentése folyamatban...")
     session = SourceSession()
     try:
         session.add_all(all_events)
@@ -182,7 +175,7 @@ def main():
     finally:
         session.close()
     
-    print(f"✅ Kész! Forrás adatok mentve a MES SQL szerverre.")
+    print(f"Kész! Forrás adatok mentve a MES SQL szerverre.")
     print("-" * 50 + "\n")
 
 if __name__ == "__main__":

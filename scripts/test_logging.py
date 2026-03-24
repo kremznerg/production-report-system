@@ -23,7 +23,7 @@ def main():
     setup_logging(settings.LOG_LEVEL)
     logger = logging.getLogger(__name__)
 
-    print("\n🔍 EcoPaper Solutions - Logging Teszt")
+    print("\nEcoPaper Solutions - Logging Teszt")
     print("-" * 40)
 
     # Különböző szintek tesztelése
@@ -33,8 +33,8 @@ def main():
     logger.error("ERROR hiba: Kritikus üzenet, mindenhol megjelenik.")
 
     print("-" * 40)
-    print("✅ Teszt üzenetek elküldve.")
-    print("📂 Ellenőrizd a 'logs/app.log' fájlt a teljes tartalomhoz!\n")
+    print("Teszt üzenetek elküldve.")
+    print("Ellenőrizd a 'logs/app.log' fájlt a teljes tartalomhoz!\n")
 
 if __name__ == "__main__":
     main()

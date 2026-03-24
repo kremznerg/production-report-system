@@ -1,41 +1,37 @@
 #!/usr/bin/env python3
 """
-ADATBÁZIS INICIALIZÁLÓ SCRIPTM
+ADATBÁZIS INICIALIZÁLÓ SCRIPT
 ==============================
-Felelős a projekt SQLite adatbázisának létrehozásáért és a táblák inicializálásáért.
-VIGYÁZAT: A script futtatása törli a meglévő adatbázist (Clean Slate)!
+Felelős a projekt PostgreSQL adatbázisának inicializálásáért és a táblák létrehozásáért.
+A script a SQLAlchemy modellek (src/database/models.py) alapján építi fel a sémát.
 """
 
 import sys
-import os
 from pathlib import Path
 
-# Projekt gyökérkönyvtár hozzáadása a Python elérési úthoz
-project_root = Path(__file__).resolve().parent.parent
+project_root: Path = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from src.database import init_db
 from src.config import settings
 
-def main():
-    """Adatbázis fájl takarítása és újratöltése."""
-    # Adatbázis elérési útjának kinyerése a konfigurációból
-    db_path = settings.DATABASE_URL.replace("sqlite:///", "")
+def main() -> None:
+    """A fő futtató függvény, ami elindítja a táblák létrehozását."""
     
-    print("\n🏗️  EcoPaper Solutions - Adatbázis Kezelő")
-    print("-" * 40)
+    print("\nEcoPaper Solutions - Adatbázis Kezelő (PostgreSQL)")
+    print("-" * 50)
     
-    # Régi fájl törlése, ha létezik (biztonságos inicializálás)
-    if os.path.exists(db_path):
-        print(f"🗑️  Régi adatbázis törlése: {db_path}")
-        os.remove(db_path)
+    print(f"Kapcsolódás a szerverhez")
     
-    # Táblák létrehozása a SQLAlchemy modellek alapján
-    print("📋 Adatbázis táblák létrehozása...")
-    init_db()
-    
-    print("✅ Kész! Az üres adatbázis létrejött: data/production.db")
-    print("-" * 40 + "\n")
+    print("Táblák létrehozása folyamatban...")
+    try:
+        init_db()
+        print("\nKész! Az adatbázis sémája sikeresen inicializálva.")
+    except Exception as e:
+        print(f"\nHiba történt az inicializálás során: {e}")
+        print("Ellenőrizd, hogy a Docker konténerek (Postgres) futnak-e!")
+        
+    print("-" * 50 + "\n")
 
 if __name__ == "__main__":
     main()
