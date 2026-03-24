@@ -26,8 +26,8 @@ class Settings(BaseSettings):
     DATA_DIR: Path = BASE_DIR / "data"
     
     # --- ADATBÁZIS ELÉRÉS ---
-    DATABASE_URL: str = "sqlite:///./data/production.db"
-    MES_DATABASE_URL: str = "sqlite:///./data/source_events.db"
+    DATABASE_URL: str = "postgresql+psycopg2://admin:admin123@localhost:5432/prod_db"
+    MES_DATABASE_URL: str = "postgresql+psycopg2://admin:admin123@localhost:5433/mes_db"
 
     # Egy "hálózati meghajtót" szimulálunk, ahol évekre és hónapokra vannak bontva az Excel fájlok
     NETWORK_SHARE_DIR: Path = DATA_DIR / "network_share"
