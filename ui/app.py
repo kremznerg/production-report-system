@@ -4,13 +4,11 @@ ECOPAPER SOLUTIONS - OPERATIONS DASHBOARD
 Ez a fő belépési pontja a Streamlit alkalmazásnak. 
 Felelős a felhasználói felület (UI) megjelenítéséért, az adatok 
 vizualizációjáért és az interaktív funkciók (szűrés, exportálás) kezeléséért.
-
-Szerző: Kremzner Gábor (2026)
 """
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta, date
+from datetime import timedelta, date
 from pathlib import Path
 import sys
 
@@ -48,7 +46,7 @@ apply_custom_css()
 def render_sidebar():
     """Az oldalsáv (sidebar) tartalmának felépítése."""
     with st.sidebar:
-        # Logó középre igazítása és méretének finomhangolása (hogy ne legyen túl nagy/pixeles)
+        # Logó középre igazítása és méretének finomhangolása
         c1, c2, c3 = st.columns([1, 6, 1])
         with c2:
             st.image("assets/logo.jpeg", width="stretch")
@@ -73,7 +71,7 @@ def render_sidebar():
             help="Válaszd ki az elemzendő papírgépet"
         )
         
-        # Dátum választás (None check a max_date-re)
+        # Dátum választás
         if total_events > 0 and max_date:
             default_date = max_date.date()
         else:
@@ -85,16 +83,44 @@ def render_sidebar():
             help="Válaszd ki az elemzés napját"
         )
             
-        # Adat szinkronizáció (ETL indítása)
-        if st.button("Napi adatok szinkronizálása", width="stretch", help="Tipp: A szinkronizáció többször is lefuttatható egy nap, a meglévő adatok felülíródnak."):
+        # Egyedi napi adat szinkronizáció (ETL indítása)
+        if st.button("Napi adatok szinkronizálása", help="Tipp: A szinkronizáció többször is lefuttatható egy nap, a meglévő adatok felülíródnak.", use_container_width=True):
             with st.spinner(f"Szinkronizálás folyamatban ({selected_date})..."):
                 try:
                     pipeline = Pipeline()
                     pipeline.run_full_load(target_date=selected_date)
-                    st.toast(f"Sikeres szinkronizáció: {selected_date}", icon="✅")
+                    st.toast(f"Sikeres szinkronizáció: {selected_date}")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Hiba a szinkronizáció során: {str(e)}")
+                    
+        # Tömeges (Bulk) Szinkronizáló
+        with st.expander("Tömeges szinkronizáció"):
+            st.markdown("<small>Több nap automatikus, visszamenőleges áttöltése a MES és Excel fájlokból.</small>", unsafe_allow_html=True)
+            bulk_start = st.date_input("Kezdő dátum", value=default_date - timedelta(days=6))
+            bulk_end = st.date_input("Záró dátum", value=default_date)
+            
+            if st.button("Napok szinkronizálása", use_container_width=True):
+                delta = bulk_end - bulk_start
+                if delta.days < 0:
+                    st.error("A kezdő dátum nem lehet nagyobb a zárónál!")
+                else:
+                    pipeline = Pipeline()
+                    progress_text = "Feldolgozás alatt... Kérlek várj!"
+                    my_bar = st.progress(0, text=progress_text)
+                    
+                    try:
+                        for i in range(delta.days + 1):
+                            current_day = bulk_start + timedelta(days=i)
+                            pipeline.run_full_load(target_date=current_day)
+                            # Betöltő sáv frissítése
+                            progress = float(i + 1) / (delta.days + 1)
+                            my_bar.progress(progress, text=f"Szinkronizálás: {current_day} ({(progress*100):.0f}%)")
+                            
+                        st.toast("Tömeges szinkronizáció befejeződött!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Hiba a {current_day} szinkronizálása közben: {str(e)}")
 
         # PDF Exportálás
         if total_events > 0:
@@ -246,7 +272,7 @@ def main():
         df_events["Időtartam_perc"] = (df_events["Vége"] - df_events["Kezdet"]).dt.total_seconds() / 60
         t_colA, t_colB = st.columns([2, 1])
         with t_colA:
-            st.plotly_chart(create_timeline_chart(df_events, machine_options[selected_machine_id]), width="stretch")
+            st.plotly_chart(create_timeline_chart(df_events), width="stretch")
         with t_colB:
             df_states = df_events.groupby("Állapot")["Időtartam_perc"].sum().reset_index(name="Perc")
             st.plotly_chart(create_status_pie_chart(df_states), width="stretch")

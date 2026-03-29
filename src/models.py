@@ -26,16 +26,9 @@ class MachineDB(Base):
     """
     __tablename__ = "machines"
     
-    id = Column(String(20), primary_key=True)
-    name = Column(String(100), nullable=False)
-    location = Column(String(100)) # Üzemegység helyszíne
-    
-    # --- KAPCSOLATOK (Relationships) ---
-    production_events = relationship("ProductionEventDB", back_populates="machine")
-    production_plans = relationship("ProductionPlanDB", back_populates="machine")
-    quality_data = relationship("QualityDataDB", back_populates="machine")
-    utilities = relationship("UtilityConsumptionDB", back_populates="machine")
-    daily_summaries = relationship("DailySummaryDB", back_populates="machine")
+    id = Column(String(5), primary_key=True)
+    name = Column(String(50), nullable=False)
+    location = Column(String(50))
 
 class ArticleDB(Base):
     """
@@ -47,13 +40,8 @@ class ArticleDB(Base):
     
     id = Column(String(50), primary_key=True)
     name = Column(String(100), nullable=False)
-    product_group = Column(String(50)) # Termékcsoport (pl. Liner, Medium)
-    nominal_gsm = Column(Float)        # Névleges négyzetmétersúly (g/m2)
-    
-    # --- KAPCSOLATOK (Relationships) ---
-    production_events = relationship("ProductionEventDB", back_populates="article")
-    production_plans = relationship("ProductionPlanDB", back_populates="article")
-    quality_data = relationship("QualityDataDB", back_populates="article")
+    product_group = Column(String(50)) 
+    nominal_gsm = Column(Float)
 
 class ProductionEventDB(Base):
     """
@@ -67,23 +55,19 @@ class ProductionEventDB(Base):
     
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, nullable=False, index=True) 
-    duration_seconds = Column(Integer) # Az esemény időtartama másodperceben
+    duration_seconds = Column(Integer) 
     
-    event_type = Column(String(20), nullable=False) # RUN, STOP, BREAK
-    status = Column(String(20)) # RUN esetén: GOOD (Jó) vagy SCRAP (Selejt)
+    event_type = Column(String(20), nullable=False) 
+    status = Column(String(20)) 
     
-    weight_kg = Column(Float)      # Gyártott mennyiség kg-ban (csak RUN esetén)
-    average_speed = Column(Float)   # Átlagsebesség a szakasz alatt (m/min)
+    weight_kg = Column(Float)      
+    average_speed = Column(Float)   
     
-    machine_id = Column(String(20), ForeignKey("machines.id"))
+    machine_id = Column(String(5), ForeignKey("machines.id"))
     article_id = Column(String(50), ForeignKey("articles.id"))
     
-    description = Column(String(255)) # Megjegyzés (pl. állás oka)
+    description = Column(String(255))
     
-    # --- KAPCSOLATOK (Relationships) ---
-    machine = relationship("MachineDB", back_populates="production_events")
-    article = relationship("ArticleDB", back_populates="production_events")
-
 class ProductionPlanDB(Base):
     """
     Napi termelési terv (Excel forrásból).
@@ -93,15 +77,11 @@ class ProductionPlanDB(Base):
     
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False, index=True)
-    machine_id = Column(String(20), ForeignKey("machines.id"))
+    machine_id = Column(String(5), ForeignKey("machines.id"))
     article_id = Column(String(50), ForeignKey("articles.id"))
     
-    target_quantity_tons = Column(Float) # Tervezett mennyiség (tonna)
-    target_speed = Column(Float)         # Tervezett sebesség (m/min)
-    
-    # --- KAPCSOLATOK (Relationships) ---
-    machine = relationship("MachineDB", back_populates="production_plans")
-    article = relationship("ArticleDB", back_populates="production_plans")
+    target_quantity_tons = Column(Float) 
+    target_speed = Column(Float)         
     
 class QualityDataDB(Base):
     """
@@ -112,16 +92,12 @@ class QualityDataDB(Base):
     
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, nullable=False)
-    machine_id = Column(String(20), ForeignKey("machines.id"))
+    machine_id = Column(String(5), ForeignKey("machines.id"))
     article_id = Column(String(50), ForeignKey("articles.id"))
     
-    moisture_pct = Column(Float)  # Mért nedvességtartalom (%)
-    gsm_measured = Column(Float)  # Mért négyzetmétersúly (g/m2)
-    strength_knm = Column(Float)  # Mért szakítószilárdság (kNm)
-    
-    # --- KAPCSOLATOK (Relationships) ---
-    machine = relationship("MachineDB", back_populates="quality_data")
-    article = relationship("ArticleDB", back_populates="quality_data")
+    moisture_pct = Column(Float)  
+    gsm_measured = Column(Float)  
+    strength_knm = Column(Float)  
 
 class UtilityConsumptionDB(Base):
     """
@@ -132,16 +108,13 @@ class UtilityConsumptionDB(Base):
     
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False, index=True)
-    machine_id = Column(String(20), ForeignKey("machines.id"))
+    machine_id = Column(String(5), ForeignKey("machines.id"))
     
-    water_m3 = Column(Float)        # Frissvíz fogyasztás (m3)
-    electricity_kwh = Column(Float)  # Villamosenergia fogyasztás (kWh)
-    steam_tons = Column(Float)       # Gőzfelhasználás (tonna)
-    fiber_tons = Column(Float)       # Alapanyag (Rost/Recovered Paper) felvétel (tonna)
-    additives_kg = Column(Float)     # Vegyszer/Adalékanyag felhasználás (kg)
-    
-    # --- KAPCSOLATOK (Relationships) ---
-    machine = relationship("MachineDB", back_populates="utilities")
+    water_m3 = Column(Float)       
+    electricity_kwh = Column(Float)  
+    steam_tons = Column(Float)       
+    fiber_tons = Column(Float)       
+    additives_kg = Column(Float)     
 
 class DailySummaryDB(Base):
     """
@@ -153,38 +126,35 @@ class DailySummaryDB(Base):
     
     id = Column(Integer, primary_key=True)
     date = Column(Date, nullable=False, index=True)
-    machine_id = Column(String(20), ForeignKey("machines.id"))
+    machine_id = Column(String(5), ForeignKey("machines.id"))
     
     # --- KPI MUTATÓK ---
-    oee_pct = Column(Float)           # Teljes Eszközhatékonyság (%)
-    availability_pct = Column(Float)  # Rendelkezésre állás (%)
-    performance_pct = Column(Float)   # Teljesítmény index (%)
-    quality_pct = Column(Float)       # Minőségi mutató (%)
+    oee_pct = Column(Float)           
+    availability_pct = Column(Float)  
+    performance_pct = Column(Float)   
+    quality_pct = Column(Float)       
     
     # --- MENNYISÉGI ADATOK (Tonna) ---
-    total_tons = Column(Float)   # Összes termelt mennyiség (Gross)
-    good_tons = Column(Float)    # Értékesíthető minőség (Net)
-    scrap_tons = Column(Float)   # Selejt mennyisége
-    target_tons = Column(Float)  # Tervezett mennyiség
+    total_tons = Column(Float)   
+    good_tons = Column(Float)    
+    scrap_tons = Column(Float)   
+    target_tons = Column(Float)  
     
     # --- HATÉKONYSÁG ÉS SEBESSÉG ---
-    total_downtime_min = Column(Float) # Összes állásidő (perc)
-    break_count = Column(Integer)      # Szakadások száma (db)
-    avg_speed_m_min = Column(Float)    # Súlyozott átlagsebesség (m/min)
-    target_speed_m_min = Column(Float) # Súlyozott tervsebesség (m/min)
+    total_downtime_min = Column(Float) 
+    break_count = Column(Integer)      
+    avg_speed_m_min = Column(Float)    
+    target_speed_m_min = Column(Float) 
     
     # --- MINŐSÉGI ÁTLAGOK ---
-    avg_moisture_pct = Column(Float)   # Átlagos nedvesség (%)
-    avg_gsm_measured = Column(Float)   # Átlagos mért GSM (g/m2)
+    avg_moisture_pct = Column(Float)   
+    avg_gsm_measured = Column(Float)   
     
     # --- FAJLAGOS MUTATÓK (Egységnyi késztermékre vetítve) ---
-    spec_electricity_kwh_t = Column(Float) # Fajlagos áram (kWh/t)
-    spec_water_m3_t = Column(Float)        # Fajlagos víz (m3/t)
-    spec_steam_t_t = Column(Float)         # Fajlagos gőz (t/t)
-    spec_fiber_t_t = Column(Float)         # Fajlagos rost (t/t)
-
-    # --- KAPCSOLATOK (Relationships) ---
-    machine = relationship("MachineDB", back_populates="daily_summaries")
+    spec_electricity_kwh_t = Column(Float) 
+    spec_water_m3_t = Column(Float)        
+    spec_steam_t_t = Column(Float)         
+    spec_fiber_t_t = Column(Float)         
 
 # --- VALIDÁTOR ÉS ADATÁTVITELI MODELLEK (PYDANTIC) ---
 
@@ -197,6 +167,7 @@ class Machine(BaseModel):
 class Article(BaseModel):
     id: str
     name: str
+    product_group: Optional[str] = None
     nominal_gsm: float
     model_config = ConfigDict(from_attributes=True)
 

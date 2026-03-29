@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 from datetime import date
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from src.extractors.excel_reader import ExcelReader
 
 @pytest.fixture

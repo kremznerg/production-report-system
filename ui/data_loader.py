@@ -29,7 +29,6 @@ def load_articles_map() -> Dict[str, str]:
 def load_machines() -> List[Machine]:
     """
     Betölti a regisztrált papírgépek listáját.
-    A nyers adatbázis rekordokat Pydantic modellekké alakítja a biztonságos kezelés érdekében.
     """
     with get_db() as db:
         db_machines = db.query(MachineDB).all()

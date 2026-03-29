@@ -10,13 +10,12 @@ import logging
 from datetime import date, datetime
 from typing import List
 
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, func
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from ..config import settings
 from ..models import ProductionEvent
 
-# Naplózás beállítása a modulhoz
 logger = logging.getLogger(__name__)
 
 
@@ -40,14 +39,14 @@ class SourceEvent(SourceBase):
     status = Column(String(20))
     weight_kg = Column(Float)
     average_speed = Column(Float)
-    machine_id = Column(String(20))
+    machine_id = Column(String(5))
     article_id = Column(String(50))
     description = Column(String(255))
 
 
 class EventsExtractor:
     """
-    Adatkinyerő osztály a MES (source_events.db) adatbázishoz.
+    Adatkinyerő osztály a MES (mes_db PostgreSQL) adatbázishoz.
     Feladata a nyers adatok transzformálása a belső Pydantic modellekre.
     """
     
@@ -70,11 +69,9 @@ class EventsExtractor:
         session = self.Session()
         
         try:
-            # Időtartomány meghatározása (nap eleje és vége)
             start_dt = datetime.combine(target_date, datetime.min.time())
             end_dt = datetime.combine(target_date, datetime.max.time())
             
-            # Lekérdezés hatékony szűréssel és sorbarendezéssel
             events = session.query(SourceEvent).filter(
                 SourceEvent.machine_id == machine_id,
                 SourceEvent.timestamp >= start_dt,
@@ -83,7 +80,6 @@ class EventsExtractor:
             
             logger.info(f"Sikeresen kinyerve {len(events)} esemény: {machine_id} | {target_date}")
             
-            # Konvertálás belső Pydantic modellekre a további validációhoz
             return [
                 ProductionEvent(
                     timestamp=e.timestamp,
@@ -119,15 +115,12 @@ class EventsExtractor:
         session = self.Session()
         
         try:
-            from sqlalchemy import func
-            # Egyedi dátumok kinyerése az időbélyegekből
             dates = session.query(
                 func.date(SourceEvent.timestamp)
             ).filter(
                 SourceEvent.machine_id == machine_id
             ).distinct().all()
             
-            # Konvertálás date objektumokká (Postgres date objektumot, SQLite string-et ad vissza)
             result = []
             for d in dates:
                 if d[0]:

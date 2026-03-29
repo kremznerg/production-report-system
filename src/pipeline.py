@@ -9,7 +9,6 @@ Ez a modul a rendszer "karmestere".
 import logging
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional
-
 from .extractors.events_extractor import EventsExtractor
 from .extractors.excel_reader import ExcelReader
 from .transformers.production_metrics import MetricsCalculator
@@ -20,7 +19,6 @@ from .models import (
     MachineDB, ProductionEvent, DailySummaryDB
 )
 
-# Naplózás beállítása a folyamathoz
 logger = logging.getLogger(__name__)
 
 class Pipeline:
@@ -51,21 +49,15 @@ class Pipeline:
             target_machine_id: (Opcionális) Ha meg van adva, csak ezt a gépet szinkronizálja.
         """
         machine_info = f" (Gép: {target_machine_id})" if target_machine_id else " (Minden gép)"
-        logger.info(f"🚀 ETL folyamat indítása: {target_date}{machine_info}")
+        logger.info(f"ETL folyamat indítása: {target_date}{machine_info}")
         
         try:
-            # 1. Excel alapú törzs- és mérési adatok betöltése
             self._load_excel_data(target_date)
-
-            # 2. Termelési események (MES) szinkronizálása
             self._load_production_events(target_date, target_machine_id)
-
-            # 3. Napi KPI mutatók (Daily Summaries) generálása
             self._update_daily_summaries(target_date, target_machine_id)
-            
-            logger.info(f"✅ ETL folyamat sikeresen befejeződött: {target_date}")
+            logger.info(f"ETL folyamat sikeresen befejeződött: {target_date}")
         except Exception as e:
-            logger.error(f"❌ Pipeline hiba a folyamat során: {str(e)}")
+            logger.error(f"Pipeline hiba a folyamat során: {str(e)}")
             raise
 
     def _get_active_machines(self) -> List[str]:
@@ -125,17 +117,14 @@ class Pipeline:
     def _load_excel_data(self, target_date: date) -> None:
         """Az összes Excel típusú forrásfájl beolvasása és mentése az adott napra."""
         
-        # 1. Termelési tervek
         plans = self.excel_reader.read_planning(target_date)
         if plans:
             self._save_plans(plans)
         
-        # 2. Labor mérések
         lab_data = self.excel_reader.read_lab_data(target_date)
         if lab_data:
             self._save_quality(lab_data)
         
-        # 3. Közmű fogyasztás
         utilities = self.excel_reader.read_utilities(target_date)
         if utilities:
             self._save_utilities(utilities)
@@ -144,7 +133,6 @@ class Pipeline:
         """Tervezési adatok mentése Upsert logikával."""
         if not plans: return
         
-        # Egyedi gép+dátum kombinációk meghatározása a törléshez
         to_clear = set((p['machine_id'], p['date']) for p in plans)
         
         with get_db() as db:
@@ -162,14 +150,14 @@ class Pipeline:
         """Minőségi adatok (labor) mentése Upsert logikával."""
         if not measurements: return
         
-        # Dátumok kinyerése a tisztításhoz
-        dates = set(m['timestamp'].date() for m in measurements)
+        to_clear = set((m['machine_id'], m['timestamp'].date()) for m in measurements)
         
         with get_db() as db:
-            for d in dates:
-                start = datetime.combine(d, datetime.min.time())
-                end = datetime.combine(d, datetime.max.time())
+            for machine_id, q_date in to_clear:
+                start = datetime.combine(q_date, datetime.min.time())
+                end = datetime.combine(q_date, datetime.max.time())
                 db.query(QualityDataDB).filter(
+                    QualityDataDB.machine_id == machine_id,
                     QualityDataDB.timestamp >= start,
                     QualityDataDB.timestamp <= end
                 ).delete()

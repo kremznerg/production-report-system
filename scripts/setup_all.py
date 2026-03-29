@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-TELJES RENDSZER SETUP (Full Installation)
+TELJES RENDSZER SETUP
 =========================================
 Ez a szkript a helyes sorrendben futtatja le az összes inicializáló lépést, 
 hogy a projektet nulláról teljesen működőképessé tegye.

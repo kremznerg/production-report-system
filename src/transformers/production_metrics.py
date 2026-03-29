@@ -6,7 +6,7 @@ Felelős a nyers adatokból (események, közművek, labor) származó
 főbb teljesítménymutatók (OEE, fajlagos fogyasztások) kiszámításáért.
 """
 
-from datetime import date
+from datetime import date, datetime
 import logging
 from typing import List, Optional
 from ..database import get_db
@@ -15,9 +15,7 @@ from ..models import (
     QualityDataDB, UtilityConsumptionDB, 
     DailySummaryDB
 )
-from sqlalchemy import func
 
-# Naplózás beállítása a modulhoz
 logger = logging.getLogger(__name__)
 
 class MetricsCalculator:
@@ -53,7 +51,6 @@ class MetricsCalculator:
         
         with get_db() as db:
             # --- 1. ADATGYŰJTÉS ---
-            from datetime import datetime
             start_dt = datetime.combine(target_date, datetime.min.time())
             end_dt = datetime.combine(target_date, datetime.max.time())
             
@@ -76,9 +73,8 @@ class MetricsCalculator:
                 UtilityConsumptionDB.date == target_date
             ).first()
             
-            # Ha nincs esemény adat, nem tudunk mit számolni
             if not events:
-                logger.warning(f"Nem található termelési esemény: {machine_id} | {target_date}. Számítás megszakítva.")
+                logger.warning(f"Nem található termelési esemény: {machine_id} | {target_date}")
                 return None
 
             # --- 2. TERMELÉSI ÖSSZESÍTŐK (TONNÁK) ---
@@ -89,7 +85,6 @@ class MetricsCalculator:
             good_tons = total_tons - scrap_tons
             
             # Súlyozott átlagsebesség (Actual Speed)
-            # Képlet: Σ (Sebesség * Súly) / Össz Súly
             if total_tons > 0:
                 weighted_actual_speed_sum = sum(e.average_speed * e.weight_kg for e in run_events)
                 avg_speed = weighted_actual_speed_sum / (total_tons * 1000.0)
@@ -98,9 +93,8 @@ class MetricsCalculator:
             
             # --- 3. IDŐ ÉS HATÉKONYSÁG ---
             
-            total_time_sec = sum(e.duration_seconds for e in events) or 1 # Nullával való osztás ellen
+            total_time_sec = sum(e.duration_seconds for e in events) or 1
             run_time_sec = sum(e.duration_seconds for e in run_events)
-            
             downtime_sec = sum(e.duration_seconds for e in events if e.event_type in ["STOP", "BREAK"])
             break_count = len([e for e in events if e.event_type == "BREAK"])
             
@@ -145,7 +139,6 @@ class MetricsCalculator:
             spec_elec = (utility.electricity_kwh / total_tons) if utility and total_tons > 0 else 0.0
             spec_water = (utility.water_m3 / total_tons) if utility and total_tons > 0 else 0.0
             spec_steam = (utility.steam_tons / total_tons) if utility and total_tons > 0 else 0.0
-            # Fibler/Rost mutató (Spec Fiber): mennyiségű tonna rost szükséges egy tonna papírhoz
             spec_fiber = (utility.fiber_tons / total_tons) if utility and total_tons > 0 else 0.0
             
             # --- EREDMÉNY OBJEKTUM ÖSSZEÁLLÍTÁSA ---
@@ -178,12 +171,9 @@ class MetricsCalculator:
         Gondoskodik az adatok konzisztenciájáról (Upsert logika).
         """
         with get_db() as db:
-            # Régi rekord törlése azonos dátum és gép esetén (elkerüli a duplikációt)
             db.query(DailySummaryDB).filter(
                 DailySummaryDB.date == summary.date,
                 DailySummaryDB.machine_id == summary.machine_id
             ).delete()
-            
             db.add(summary)
-            # A változtatások elmentése (commit) a context manager végén automatikus
             logger.info(f"Napi riport mentve: {summary.machine_id} | {summary.date}")

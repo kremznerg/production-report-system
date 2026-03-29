@@ -11,10 +11,8 @@ import logging
 from pathlib import Path
 from datetime import date
 from typing import List, Dict, Any, Optional
-
 from ..config import settings
 
-# Naplózás beállítása a modulhoz
 logger = logging.getLogger(__name__)
 
 class ExcelReader:
@@ -31,38 +29,24 @@ class ExcelReader:
         """
         year = target_date.year
         month = target_date.strftime('%m')
-        
         file_path: Path = dir_path / f"{prefix}_{year}.xlsx"
-        
         if not file_path.exists():
             logger.warning(f"Adatfájl nem található: {file_path}")
             return []
-            
         try:
-            # Csak az adott hónapnak megfelelő fület olvassuk be (memory efficient)
             df = pd.read_excel(file_path, sheet_name=month)
-            
-            # Oszlopok átnevezése
             df.columns = columns
-            
             date_col_name = columns[date_col_idx]
-            
-            # Dátum/Idő formázás
             if date_col_name == 'timestamp':
                 df[date_col_name] = pd.to_datetime(df[date_col_name], errors='coerce')
                 df.dropna(subset=[date_col_name], inplace=True)
-                # Szűrés a kért napra
                 df = df[df[date_col_name].dt.date == target_date]
             else:
                 df[date_col_name] = pd.to_datetime(df[date_col_name], errors='coerce').dt.date
                 df.dropna(subset=[date_col_name], inplace=True)
-                # Szűrés a kért napra
                 df = df[df[date_col_name] == target_date]
-            
             return df.to_dict('records')
-            
         except ValueError:
-            # Ha nem létezik az adott nevű munkalap (hónap sheet)
             logger.warning(f"Nincs adat erre a hónapra ({month}) a '{file_path}' fájlban.")
             return []
         except Exception as e:

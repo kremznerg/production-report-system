@@ -44,7 +44,7 @@ def render_sparkline(values, color="#0d6efd"):
     )
     return fig
 
-def create_timeline_chart(df_events, machine_name: str):
+def create_timeline_chart(df_events):
     """
     Interaktív Gantt-diagram (idővonal) a termelési eseményekhez.
     Megjeleníti a gép állapotát (RUN, STOP, BREAK) az idő függvényében.

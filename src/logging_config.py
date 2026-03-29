@@ -22,25 +22,20 @@ def setup_logging(log_level: str = "INFO") -> None:
         log_level (str): A minimális naplózási szint (DEBUG, INFO, WARNING, ERROR).
                         Alapértelmezett: INFO.
     """
-    # logs mappa létrehozása, ha még nem létezik
     log_dir = Path(__file__).resolve().parent.parent / "logs"
     log_dir.mkdir(exist_ok=True)
     
-    # Napló bejegyzések formátuma (Idő, Szint, Modul neve, Üzenet)
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
     
-    # 1. Konzol kezelő (Csak kritikusabb üzenetekhez - WARNING és felette)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.WARNING)
     console_handler.setFormatter(logging.Formatter(log_format, date_format))
     
-    # 2. Fájl kezelő (Részletesebb naplózás - INFO és felette)
     file_handler = logging.FileHandler(log_dir / "app.log", encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter(log_format, date_format))
     
-    # Root logger beállítása az alapértelmezett beállításokkal
     logging.basicConfig(
         level=log_level,
         format=log_format,
@@ -48,7 +43,6 @@ def setup_logging(log_level: str = "INFO") -> None:
         handlers=[console_handler, file_handler]
     )
     
-    # Biztosítjuk, hogy a root logger csak a mi custom handlereinket használja
     root_logger = logging.getLogger()
     if root_logger.hasHandlers():
         root_logger.handlers.clear()

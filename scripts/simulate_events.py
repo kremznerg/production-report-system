@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MES ESEMÉNY SZIMULÁTOR (Source System Simulator)
+MES ESEMÉNY SZIMULÁTOR
 ================================================
 Létrehoz egy külön PostgreSQL adatbázist (mes_db), amely a gyári MES rendszert szimulálja.
 Ez az alapforrása a termelési eseményeknek (RUN, STOP, BREAK).
