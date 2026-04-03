@@ -13,7 +13,7 @@ logs/*.log
 
 # Dokumentumok és szemét
 *.pdf
-docs/*.pdf
+docs/
 temp/
 
 
