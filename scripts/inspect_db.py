@@ -71,8 +71,6 @@ def inspect_db() -> None:
                 print("─" * 60)
         except Exception as e:
             print(f"\nHIBA az adatok lekérdezése közben: {e}")
-    
-    print("\n" + "═" * 60 + "\n")
 
 if __name__ == "__main__":
     inspect_db()

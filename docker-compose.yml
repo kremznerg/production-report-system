@@ -35,6 +35,9 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+      - ./ui:/app/ui
     environment:
       - PERSIST_DATA=true
       - DATABASE_URL=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}

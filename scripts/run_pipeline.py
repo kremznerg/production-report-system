@@ -20,7 +20,7 @@ from src.pipeline import Pipeline
 
 # --- KONSTANSOK ---
 END_DATE = date.today()
-START_DATE = END_DATE - timedelta(days=365)
+START_DATE = END_DATE - timedelta(days=30)
 
 def main() -> None:
     """Végrehajtja a ciklikus adatbetöltést a teljes mintatartományra."""
